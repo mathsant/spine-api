@@ -15,7 +15,7 @@ See `.specify/memory/architecture.md` for structure and conventions and
 
 ```bash
 nvm use
-npm install
+pnpm install
 cp .env.example .env
 ```
 
@@ -35,7 +35,7 @@ Environment variables (validated on boot — a missing/invalid one aborts startu
 
 ```bash
 docker compose up -d          # local MongoDB (healthcheck: docker compose ps)
-npm run dev                    # tsx watch, structured logs with reqId
+pnpm dev                    # tsx watch, structured logs with reqId
 ```
 
 Check it:
@@ -56,7 +56,7 @@ into the request logs.
 Production build:
 
 ```bash
-npm run build && npm start
+pnpm build && pnpm start
 ```
 
 `SIGTERM`/`SIGINT` trigger a graceful shutdown: stop accepting requests, drain
@@ -65,19 +65,19 @@ in-flight ones, close the MongoDB connection, exit 0.
 ## Tests
 
 ```bash
-npm run test:unit          # pure functions, no database
-npm run test:integration   # business rules against mongodb-memory-server
-npm run test               # both
-npm run test:coverage      # both + coverage; fails if src/services/** < 70%
+pnpm test:unit          # pure functions, no database
+pnpm test:integration   # business rules against mongodb-memory-server
+pnpm test                # both
+pnpm test:coverage      # both + coverage; fails if src/services/** < 70%
 ```
 
 ## Lint & format
 
 ```bash
-npm run lint               # eslint — also enforces: no default exports,
+pnpm lint               # eslint — also enforces: no default exports,
                            # no `mongodb` import outside repositories/db,
                            # no `process.env` outside src/config and src/server.ts
-npm run format             # prettier --write
+pnpm format             # prettier --write
 ```
 
 ## Migrations
@@ -85,13 +85,13 @@ npm run format             # prettier --write
 Infrastructure only — no data migrations yet.
 
 ```bash
-npm run migrate:up
-npm run migrate:down
-npm run migrate:create -- <name>
+pnpm migrate:up
+pnpm migrate:down
+pnpm migrate:create -- <name>
 ```
 
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request:
-`npm ci → lint → test:unit → test:integration → build → coverage gate`.
+`pnpm install → lint → test:unit → test:integration → build → coverage gate`.
 Any failing stage fails the pipeline.

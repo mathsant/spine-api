@@ -10,24 +10,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
+          cache: pnpm
 
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Unit tests
-        run: npm run test:unit
+        run: pnpm run test:unit
 
       - name: Integration tests
-        run: npm run test:integration
+        run: pnpm run test:integration
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Coverage gate (business rules >= 70%)
-        run: npm run test:coverage
+        run: pnpm run test:coverage
