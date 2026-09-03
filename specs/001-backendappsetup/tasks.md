@@ -67,10 +67,10 @@ Fases (cada uma é um marco entregável):
 
 ## Fase 4: Ciclo de vida do processo
 
-- [ ] T041 [P] Escrever teste unitário do encerramento gracioso (TDD): emitir `SIGTERM` chama o callback de fechamento **uma vez**; um segundo `SIGTERM` durante o encerramento é ignorado; o timeout de segurança força a saída. Usa um `app` fake com `close()` espião. Arquivo: `tests/unit/lifecycle/graceful-shutdown.spec.ts`
-- [ ] T042 Criar `registerShutdownHandlers(app, { timeoutMs = 10_000 })` em `src/lifecycle/graceful-shutdown.ts` (com `index.ts`): registra `SIGTERM`/`SIGINT`, chama `app.close()` uma única vez (guarda de sinal repetido) e depois `process.exit(0)`; timeout de segurança força a saída. Arquivo: `src/lifecycle/graceful-shutdown.ts` (depende de nada além da Fase 1; faz T041 passar)
-- [ ] T043 Escrever teste de integração do encerramento no nível da aplicação (TDD): `buildApp` com Mongo em memória → `await app.close()` resolve e o `MongoClient` fica fechado (disposer do Awilix disparou); cobre o cenário de aceitação 7. Arquivo: `tests/integration/app/shutdown.spec.ts` (depende de T028, T040)
-- [ ] T044 Criar o entrypoint: `loadConfig(process.env)` → `buildApp` → `connectMongo(container.resolve('mongoClient'), app.log)` → `app.listen({ port, host })` → `registerShutdownHandlers(app)`. Arquivo: `src/server.ts` (depende de T040, T042, T025; confirma T043 quanto ao disposer)
+- [x] T041 [P] Escrever teste unitário do encerramento gracioso (TDD): emitir `SIGTERM` chama o callback de fechamento **uma vez**; um segundo `SIGTERM` durante o encerramento é ignorado; o timeout de segurança força a saída. Usa um `app` fake com `close()` espião. Arquivo: `tests/unit/lifecycle/graceful-shutdown.spec.ts`
+- [x] T042 Criar `registerShutdownHandlers(app, { timeoutMs = 10_000 })` em `src/lifecycle/graceful-shutdown.ts` (com `index.ts`): registra `SIGTERM`/`SIGINT`, chama `app.close()` uma única vez (guarda de sinal repetido) e depois `process.exit(0)`; timeout de segurança força a saída. Arquivo: `src/lifecycle/graceful-shutdown.ts` (depende de nada além da Fase 1; faz T041 passar)
+- [x] T043 Escrever teste de integração do encerramento no nível da aplicação (TDD): `buildApp` com Mongo em memória → `await app.close()` resolve e o `MongoClient` fica fechado (disposer do Awilix disparou); cobre o cenário de aceitação 7. Arquivo: `tests/integration/app/shutdown.spec.ts` (depende de T028, T040)
+- [x] T044 Criar o entrypoint: `loadConfig(process.env)` → `buildApp` → `connectMongo(container.resolve('mongoClient'), app.log)` → `app.listen({ port, host })` → `registerShutdownHandlers(app)`. Arquivo: `src/server.ts` (depende de T040, T042, T025; confirma T043 quanto ao disposer)
 
 ## Fase 5: CI e documentação
 
