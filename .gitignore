@@ -1,5 +1,8 @@
 /tmp
 /out-tsc
+/dist
+/coverage
+/.mongodb-binaries
 
 /node_modules
 .env
