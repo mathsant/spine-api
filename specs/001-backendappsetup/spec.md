@@ -108,21 +108,21 @@ Uma pessoa desenvolvedora clona o repositório vazio e precisa de um backend pro
 
 ## Definição de Pronto (Definition of Done) *(obrigatório)*
 
-- [ ] Instalação de dependências limpa e build sem erros de tipo
-- [ ] O `docker-compose` sobe o Mongo; a aplicação sobe e `GET /health` responde `200` com `db: "up"`
-- [ ] Com o Mongo parado, `GET /health` responde `503` com `db: "down"` e a aplicação continua no ar
-- [ ] Variável de ambiente obrigatória ausente/inválida → a aplicação não sobe e imprime o que está errado
-- [ ] Testes unitários e testes de integração passam; a integração usa banco em memória
-- [ ] Cobertura das regras de negócio ≥ 70%, caso contrário o CI falha
-- [ ] Lint sem erros
-- [ ] Pipeline de CI verde: instalação → lint → testes unitários → testes de integração → build
-- [ ] Estrutura de pastas das camadas criada conforme `.specify/memory/architecture.md`, com `index.ts` de re-export e nenhum `export default`; camadas sem código nesta feature (ex.: `src/schemas/`) existem como pasta marcadora
-- [ ] Fatia `health` completa (controller → service → repository) servindo de template, com teste unitário e de integração
-- [ ] Erro que deriva do tipo base vira resposta HTTP no formato `{ error: { code, message, statusCode, details? } }`; erro não tratado → `500` genérico
-- [ ] `SIGTERM`/`SIGINT` encerram a aplicação fechando a conexão com o Mongo (registro de handlers coberto por teste; sinal repetido não reexecuta o encerramento)
-- [ ] `x-request-id` recebido é propagado e aparece no log/resposta da requisição (coberto por teste)
-- [ ] Arquivo de exemplo de ambiente, `.nvmrc` e `engines` (Node 24) versionados
-- [ ] README com os passos para rodar localmente
+- [x] Instalação de dependências limpa e build sem erros de tipo — `npm install` (0 vulnerabilidades), `npm run build` gera `dist/server.js`
+- [~] O `docker-compose` sobe o Mongo; a aplicação sobe e `GET /health` responde `200` com `db: "up"` — `docker-compose.yml` escrito; `GET /health` → `200`/`db:"up"` provado por teste de integração (`app.inject`). Falta a verificação manual `docker compose up` + `npm run dev` (daemon Docker indisponível no ambiente de implementação)
+- [x] Com o Mongo parado, `GET /health` responde `503` com `db: "down"` e a aplicação continua no ar — teste de integração `health.routes.spec.ts` (caminho unreachable)
+- [x] Variável de ambiente obrigatória ausente/inválida → a aplicação não sobe e imprime o que está errado — verificado: `tsx src/server.ts` sem env imprime `MONGO_URI`/`MONGO_DB_NAME` e sai com código 1; + `load-config.spec.ts`
+- [x] Testes unitários e testes de integração passam; a integração usa banco em memória — 19 testes verdes (7 arquivos); integração usa `mongodb-memory-server`
+- [x] Cobertura das regras de negócio ≥ 70%, caso contrário o CI falha — `src/services/**` a 100%; confirmado que o gate por glob quebra o run quando não atingido
+- [x] Lint sem erros — `npm run lint` limpo
+- [~] Pipeline de CI verde: instalação → lint → testes unitários → testes de integração → build — workflow `.github/workflows/ci.yml` com exatamente esses estágios + gate de cobertura; roda no primeiro push
+- [x] Estrutura de pastas das camadas criada conforme `.specify/memory/architecture.md`, com `index.ts` de re-export e nenhum `export default`; camadas sem código nesta feature (ex.: `src/schemas/`) existem como pasta marcadora — `grep "export default" src` → nada; `src/schemas/.gitkeep` versionado; cada pasta de domínio tem `index.ts`
+- [x] Fatia `health` completa (controller → service → repository) servindo de template, com teste unitário e de integração
+- [x] Erro que deriva do tipo base vira resposta HTTP no formato `{ error: { code, message, statusCode, details? } }`; erro não tratado → `500` genérico — `error-handler.spec.ts` (AppError / ZodError / genérico, sem vazamento)
+- [x] `SIGTERM`/`SIGINT` encerram a aplicação fechando a conexão com o Mongo (registro de handlers coberto por teste; sinal repetido não reexecuta o encerramento) — `graceful-shutdown.spec.ts` (once / repetido ignorado / timeout) + `app/shutdown.spec.ts` (disposer fecha o `MongoClient`)
+- [x] `x-request-id` recebido é propagado e aparece no log/resposta da requisição (coberto por teste) — `health.routes.spec.ts` assere o header na resposta
+- [x] Arquivo de exemplo de ambiente, `.nvmrc` e `engines` (Node 24) versionados
+- [x] README com os passos para rodar localmente
 
 ---
 

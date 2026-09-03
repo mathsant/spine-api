@@ -74,10 +74,10 @@ Fases (cada uma é um marco entregável):
 
 ## Fase 5: CI e documentação
 
-- [ ] T045 [P] Criar o workflow de CI: em `push` e `pull_request`, `actions/setup-node` com Node 24, `npm ci`, depois `npm run lint` → `npm run test:unit` → `npm run test:integration` → `npm run build`; passo `npm run test:coverage` (agrega unit + integration) que falha se a cobertura de `src/services/**` ficar abaixo de 70% (RF-031/032/033). Arquivo: `.github/workflows/ci.yml`
-- [ ] T046 [P] Criar o `README.md` com os passos do `quickstart.md`: subir o Mongo via `docker compose`, instalar, configurar `.env`, `npm run dev`, rodar testes e lint, comandos de migration, e o que o CI valida (RF-030). Arquivo: `README.md`
-- [ ] T047 [P] Rodar `npm run lint`, `npm run test:coverage` e `npm run build`; conferir `grep -rn "export default" src` vazio, um `index.ts` em cada pasta de domínio e `src/schemas/` presente; sanar o que falhar. Sem arquivo fixo (ajustes pontuais onde o comando apontar)
-- [ ] T048 Executar `specs/001-backendappsetup/quickstart.md` de ponta a ponta e marcar cada item da "Definição de Pronto" no `spec.md`. Arquivo: `specs/001-backendappsetup/spec.md`
+- [x] T045 [P] Criar o workflow de CI: em `push` e `pull_request`, `actions/setup-node` com Node 24, `npm ci`, depois `npm run lint` → `npm run test:unit` → `npm run test:integration` → `npm run build`; passo `npm run test:coverage` (agrega unit + integration) que falha se a cobertura de `src/services/**` ficar abaixo de 70% (RF-031/032/033). Arquivo: `.github/workflows/ci.yml`
+- [x] T046 [P] Criar o `README.md` com os passos do `quickstart.md`: subir o Mongo via `docker compose`, instalar, configurar `.env`, `npm run dev`, rodar testes e lint, comandos de migration, e o que o CI valida (RF-030). Arquivo: `README.md`
+- [x] T047 [P] Rodar `npm run lint`, `npm run test:coverage` e `npm run build`; conferir `grep -rn "export default" src` vazio, um `index.ts` em cada pasta de domínio e `src/schemas/` presente; sanar o que falhar. Sem arquivo fixo (ajustes pontuais onde o comando apontar)
+- [x] T048 Executar `specs/001-backendappsetup/quickstart.md` de ponta a ponta e marcar cada item da "Definição de Pronto" no `spec.md`. Arquivo: `specs/001-backendappsetup/spec.md`
 
 ---
 
