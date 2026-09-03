@@ -1,15 +1,16 @@
 import type { AppConfig } from '../config';
 import type { Db, MongoClient } from '../db';
+import type { HealthRepository } from '../repositories/health';
+import type { GetHealth } from '../services/health';
 
 /**
- * Everything resolvable from the Awilix container. Extended as layers are added.
+ * Everything resolvable from the Awilix container.
  * Registered via `registerInfrastructure` / `registerRepositories` / `registerServices`.
- *
- * Used as the explicit generic for `AwilixContainer<AppCradle>` and when reading
- * `request.diScope.cradle` in controllers.
  */
 export interface AppCradle {
   config: AppConfig;
   mongoClient: MongoClient;
   db: Db;
+  healthRepository: HealthRepository;
+  getHealthService: GetHealth;
 }
