@@ -43,7 +43,7 @@ Uma pessoa desenvolvedora clona o repositório vazio e precisa de um backend pro
 
 **Estrutura e convenções**
 
-- **RF-001**: O projeto DEVE criar a estrutura de pastas por camada descrita em `.specify/memory/architecture.md` (`controllers/`, `services/`, `repositories/`, `schemas/`, `errors/`, `config/`, `container/`, `db/` sob `src/`), com as subpastas por domínio contendo `index.ts` de re-export.
+- **RF-001**: O projeto DEVE criar a estrutura de pastas por camada descrita em `.specify/memory/architecture.md` (`controllers/`, `services/`, `repositories/`, `schemas/`, `errors/`, `config/`, `container/`, `db/` sob `src/`), com as subpastas por domínio contendo `index.ts` de re-export. As camadas sem código nesta feature (ex.: `schemas/`, pois a fatia `health` não recebe entrada) DEVEM existir como pasta marcadora (`.gitkeep`) para as próximas features.
 - **RF-002**: Todo módulo DEVE usar exports nomeados; o código NÃO DEVE conter nenhum `export default`.
 - **RF-003**: O projeto DEVE fixar a versão do runtime em Node 24 via `.nvmrc` e via o campo `engines` do manifesto de pacote.
 - **RF-004**: O projeto DEVE separar a suíte de testes unitários da suíte de testes de integração, com comandos distintos para rodar cada uma e um comando que roda ambas.
@@ -65,7 +65,7 @@ Uma pessoa desenvolvedora clona o repositório vazio e precisa de um backend pro
 **Ciclo de vida e observabilidade**
 
 - **RF-013**: A aplicação DEVE ter um entrypoint que apenas lê a configuração e inicia a escuta, separado do módulo que monta a instância do servidor e registra plugins.
-- **RF-014**: A aplicação DEVE registrar logs estruturados, com nível controlado por `LOG_LEVEL`, e DEVE correlacionar os logs de uma mesma requisição por um identificador de requisição (`request-id`).
+- **RF-014**: A aplicação DEVE registrar logs estruturados, com nível controlado por `LOG_LEVEL`, e DEVE correlacionar os logs de uma mesma requisição por um identificador de requisição (`request-id`), aceitando o valor recebido no cabeçalho `x-request-id` quando presente. O comportamento DEVE ser verificável por teste (o identificador aparece na resposta e/ou nos logs da requisição).
 - **RF-015**: A aplicação DEVE, ao receber `SIGTERM` ou `SIGINT`, parar de aceitar novas requisições, concluir as em andamento, fechar a conexão com o banco e encerrar com código de saída zero.
 - **RF-016**: A aplicação DEVE estabelecer a conexão com o banco na inicialização e disponibilizá-la às camadas via injeção de dependências.
 
@@ -116,10 +116,11 @@ Uma pessoa desenvolvedora clona o repositório vazio e precisa de um backend pro
 - [ ] Cobertura das regras de negócio ≥ 70%, caso contrário o CI falha
 - [ ] Lint sem erros
 - [ ] Pipeline de CI verde: instalação → lint → testes unitários → testes de integração → build
-- [ ] Estrutura de pastas das camadas criada conforme `.specify/memory/architecture.md`, com `index.ts` de re-export e nenhum `export default`
+- [ ] Estrutura de pastas das camadas criada conforme `.specify/memory/architecture.md`, com `index.ts` de re-export e nenhum `export default`; camadas sem código nesta feature (ex.: `src/schemas/`) existem como pasta marcadora
 - [ ] Fatia `health` completa (controller → service → repository) servindo de template, com teste unitário e de integração
 - [ ] Erro que deriva do tipo base vira resposta HTTP no formato `{ error: { code, message, statusCode, details? } }`; erro não tratado → `500` genérico
-- [ ] `SIGTERM`/`SIGINT` encerram a aplicação fechando a conexão com o Mongo
+- [ ] `SIGTERM`/`SIGINT` encerram a aplicação fechando a conexão com o Mongo (registro de handlers coberto por teste; sinal repetido não reexecuta o encerramento)
+- [ ] `x-request-id` recebido é propagado e aparece no log/resposta da requisição (coberto por teste)
 - [ ] Arquivo de exemplo de ambiente, `.nvmrc` e `engines` (Node 24) versionados
 - [ ] README com os passos para rodar localmente
 

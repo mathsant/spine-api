@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://better-books/contracts/error-response.schema.json",
+  "title": "ErrorResponse",
+  "description": "Envelope único de resposta de erro da API. spec RF-023..RF-028.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["error"],
+  "properties": {
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "statusCode"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "description": "Identificador estável do erro em SCREAMING_SNAKE_CASE."
+        },
+        "message": {
+          "type": "string",
+          "description": "Texto legível. Para 500 é sempre genérico ('Internal Server Error')."
+        },
+        "statusCode": {
+          "type": "integer",
+          "minimum": 400,
+          "maximum": 599
+        },
+        "details": {
+          "description": "Contexto estruturado opcional. Presente apenas em erros que o carregam (hoje: VALIDATION_ERROR).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "message"],
+            "properties": {
+              "path": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Request body is invalid",
+        "statusCode": 400,
+        "details": [{ "path": "title", "message": "Required" }]
+      }
+    },
+    {
+      "error": { "code": "NOT_FOUND", "message": "Resource not found", "statusCode": 404 }
+    },
+    {
+      "error": { "code": "DATABASE_UNAVAILABLE", "message": "Database is unavailable", "statusCode": 503 }
+    },
+    {
+      "error": { "code": "INTERNAL_ERROR", "message": "Internal Server Error", "statusCode": 500 }
+    }
+  ]
+}

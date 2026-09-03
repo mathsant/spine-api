@@ -1,0 +1,59 @@
+openapi: 3.1.0
+info:
+  title: better-books — health
+  version: 0.1.0
+  description: >
+    Contrato do endpoint de health-check entregue pela feature 001-backendappsetup.
+    Referência: spec RF-017..RF-022.
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Liveness/readiness da aplicação e da conexão com o MongoDB.
+      description: >
+        Sempre responde (não depende de o banco estar de pé). Retorna 200 quando
+        o banco responde ao ping; 503 quando não responde. O processo nunca cai
+        por conta de db=down.
+      responses:
+        "200":
+          description: Aplicação saudável, banco acessível.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+              examples:
+                healthy:
+                  value: { status: "ok", db: "up", uptime: 42 }
+        "503":
+          description: Aplicação no ar, banco inacessível.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+              examples:
+                degraded:
+                  value: { status: "degraded", db: "down", uptime: 42 }
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      additionalProperties: false
+      required: [status, db, uptime]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        db:
+          type: string
+          enum: [up, down]
+        uptime:
+          type: integer
+          minimum: 0
+          description: Segundos inteiros desde o start do processo.
+    invariants:
+      description: |
+        - db == "up"  <=> status == "ok"  <=> HTTP 200
+        - db == "down" <=> status == "degraded" <=> HTTP 503
+      type: object
