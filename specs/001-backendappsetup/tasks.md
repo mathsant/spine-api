@@ -32,22 +32,22 @@ Fases (cada uma é um marco entregável):
 
 ## Fase 2: Núcleo transversal
 
-- [ ] T012 Criar classe base abstrata `AppError` (campos `code`, `message`, `statusCode`, `details?`, `isOperational = true`) estendendo `Error`. Arquivo: `src/errors/app-error.ts`
-- [ ] T013 [P] Criar `ValidationError extends AppError` (`code: 'VALIDATION_ERROR'`, `statusCode: 400`, `details` = issues achatadas de um `ZodError`) com um factory `fromZodError(err)`. Arquivo: `src/errors/validation-error.ts` (depende de T012)
-- [ ] T014 [P] Criar `NotFoundError extends AppError` (`code: 'NOT_FOUND'`, `statusCode: 404`). Arquivo: `src/errors/not-found-error.ts` (depende de T012)
-- [ ] T015 [P] Criar `DatabaseUnavailableError extends AppError` (`code: 'DATABASE_UNAVAILABLE'`, `statusCode: 503`). Arquivo: `src/errors/database-unavailable-error.ts` (depende de T012)
-- [ ] T016 Criar `src/errors/index.ts` reexportando `AppError`, `ValidationError`, `NotFoundError`, `DatabaseUnavailableError`. Arquivo: `src/errors/index.ts` (depende de T012–T015)
-- [ ] T017 [P] Escrever teste unitário do carregador de config (TDD): env válido → `AppConfig` com defaults aplicados; `MONGO_URI` ausente → `process.exit(1)` e mensagem citando o campo; `PORT` não-numérico → inválido. Arquivo: `tests/unit/config/load-config.spec.ts`
-- [ ] T018 Criar o schema `zod` das variáveis de ambiente conforme `contracts/env.contract.md`; exportar `type AppConfig = z.infer<typeof envSchema>`. Arquivo: `src/config/env.schema.ts`
-- [ ] T019 Criar `loadConfig(env: NodeJS.ProcessEnv): AppConfig` que valida com `envSchema`, e em erro imprime cada issue e chama `process.exit(1)`. Arquivo: `src/config/load-config.ts` (depende de T018; faz T017 passar)
-- [ ] T020 Criar `src/config/index.ts` reexportando `loadConfig`, `envSchema`, `AppConfig`. Arquivo: `src/config/index.ts` (depende de T018–T019)
-- [ ] T021 [P] Escrever teste unitário do error handler (TDD): `AppError` → envelope com o `statusCode` do erro; `ZodError` → `400` com `details`; `Error` genérico → `500` com corpo `{ error: { code: 'INTERNAL_ERROR', ... } }` e sem `stack`/mensagem interna. Arquivo: `tests/unit/http/error-handler.spec.ts` (depende de T016)
-- [ ] T022 Criar `ErrorResponse` (tipo do envelope) e `toErrorResponse(err: AppError): ErrorResponse` conforme `contracts/error-response.schema.json`. Arquivo: `src/http/error-response.ts` (depende de T016)
-- [ ] T023 Criar `registerErrorHandler(app: FastifyInstance)` usando `app.setErrorHandler`: `instanceof AppError` → `toErrorResponse`; `ZodError` → `ValidationError.fromZodError`; senão logar o erro completo e responder `500` `{ error: { code: 'INTERNAL_ERROR', message: 'Internal Server Error', statusCode: 500 } }` (sem classe `InternalError` — é literal). Arquivo: `src/http/error-handler.ts` (depende de T022, T013; faz T021 passar)
-- [ ] T024 Criar `src/http/index.ts` reexportando `registerErrorHandler`, `ErrorResponse`, `toErrorResponse`. Arquivo: `src/http/index.ts` (depende de T022–T023)
-- [ ] T025 [P] Criar `createMongoClient(config: AppConfig): MongoClient` (`serverSelectionTimeoutMS: 2000`, sem conectar) e `connectMongo(client, logger): Promise<void>` (tenta `client.connect()`, captura e loga o erro, **não lança**). Arquivo: `src/db/mongo-client.ts`
-- [ ] T026 Criar `src/db/index.ts` reexportando `createMongoClient`, `connectMongo`. Arquivo: `src/db/index.ts` (depende de T025)
-- [ ] T027 Criar `registerInfrastructure(container)` (Awilix): `config` (`asValue`), `mongoClient` (`asFunction`, singleton, disposer `(c) => c.close()`), `db` (`asFunction` → `mongoClient.db(config.mongoDbName)`, singleton). Arquivo: `src/container/register-infrastructure.ts` (depende de T020, T026)
+- [x] T012 Criar classe base abstrata `AppError` (campos `code`, `message`, `statusCode`, `details?`, `isOperational = true`) estendendo `Error`. Arquivo: `src/errors/app-error.ts`
+- [x] T013 [P] Criar `ValidationError extends AppError` (`code: 'VALIDATION_ERROR'`, `statusCode: 400`, `details` = issues achatadas de um `ZodError`) com um factory `fromZodError(err)`. Arquivo: `src/errors/validation-error.ts` (depende de T012)
+- [x] T014 [P] Criar `NotFoundError extends AppError` (`code: 'NOT_FOUND'`, `statusCode: 404`). Arquivo: `src/errors/not-found-error.ts` (depende de T012)
+- [x] T015 [P] Criar `DatabaseUnavailableError extends AppError` (`code: 'DATABASE_UNAVAILABLE'`, `statusCode: 503`). Arquivo: `src/errors/database-unavailable-error.ts` (depende de T012)
+- [x] T016 Criar `src/errors/index.ts` reexportando `AppError`, `ValidationError`, `NotFoundError`, `DatabaseUnavailableError`. Arquivo: `src/errors/index.ts` (depende de T012–T015)
+- [x] T017 [P] Escrever teste unitário do carregador de config (TDD): env válido → `AppConfig` com defaults aplicados; `MONGO_URI` ausente → `process.exit(1)` e mensagem citando o campo; `PORT` não-numérico → inválido. Arquivo: `tests/unit/config/load-config.spec.ts`
+- [x] T018 Criar o schema `zod` das variáveis de ambiente conforme `contracts/env.contract.md`; exportar `type AppConfig = z.infer<typeof envSchema>`. Arquivo: `src/config/env.schema.ts`
+- [x] T019 Criar `loadConfig(env: NodeJS.ProcessEnv): AppConfig` que valida com `envSchema`, e em erro imprime cada issue e chama `process.exit(1)`. Arquivo: `src/config/load-config.ts` (depende de T018; faz T017 passar)
+- [x] T020 Criar `src/config/index.ts` reexportando `loadConfig`, `envSchema`, `AppConfig`. Arquivo: `src/config/index.ts` (depende de T018–T019)
+- [x] T021 [P] Escrever teste unitário do error handler (TDD): `AppError` → envelope com o `statusCode` do erro; `ZodError` → `400` com `details`; `Error` genérico → `500` com corpo `{ error: { code: 'INTERNAL_ERROR', ... } }` e sem `stack`/mensagem interna. Arquivo: `tests/unit/http/error-handler.spec.ts` (depende de T016)
+- [x] T022 Criar `ErrorResponse` (tipo do envelope) e `toErrorResponse(err: AppError): ErrorResponse` conforme `contracts/error-response.schema.json`. Arquivo: `src/http/error-response.ts` (depende de T016)
+- [x] T023 Criar `registerErrorHandler(app: FastifyInstance)` usando `app.setErrorHandler`: `instanceof AppError` → `toErrorResponse`; `ZodError` → `ValidationError.fromZodError`; senão logar o erro completo e responder `500` `{ error: { code: 'INTERNAL_ERROR', message: 'Internal Server Error', statusCode: 500 } }` (sem classe `InternalError` — é literal). Arquivo: `src/http/error-handler.ts` (depende de T022, T013; faz T021 passar)
+- [x] T024 Criar `src/http/index.ts` reexportando `registerErrorHandler`, `ErrorResponse`, `toErrorResponse`. Arquivo: `src/http/index.ts` (depende de T022–T023)
+- [x] T025 [P] Criar `createMongoClient(config: AppConfig): MongoClient` (`serverSelectionTimeoutMS: 2000`, sem conectar) e `connectMongo(client, logger): Promise<void>` (tenta `client.connect()`, captura e loga o erro, **não lança**). Arquivo: `src/db/mongo-client.ts`
+- [x] T026 Criar `src/db/index.ts` reexportando `createMongoClient`, `connectMongo`. Arquivo: `src/db/index.ts` (depende de T025)
+- [x] T027 Criar `registerInfrastructure(container)` (Awilix): `config` (`asValue`), `mongoClient` (`asFunction`, singleton, disposer `(c) => c.close()`), `db` (`asFunction` → `mongoClient.db(config.mongoDbName)`, singleton). Arquivo: `src/container/register-infrastructure.ts` (depende de T020, T026)
 
 ## Fase 3: Fatia vertical `health` (TDD)
 

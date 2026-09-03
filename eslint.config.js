@@ -60,8 +60,22 @@ module.exports = tseslint.config(
   },
   {
     // Config files and tests are not part of the layered runtime; relax type-aware noise.
-    files: ['*.js', '*.config.ts', 'tests/**/*.ts'],
+    files: ['**/*.js', '**/*.config.{ts,mts,cts}', 'tests/**/*.ts'],
     ...tseslint.configs.disableTypeChecked,
+  },
+  {
+    // Tooling/config files: CommonJS require and a default export are expected here.
+    files: [
+      '**/*.js',
+      '**/*.cjs',
+      '**/*.config.{ts,mts,cts}',
+      'eslint.config.js',
+      'migrate-mongo-config.js',
+    ],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+      'no-restricted-syntax': 'off',
+    },
   },
   eslintConfigPrettier,
 );
