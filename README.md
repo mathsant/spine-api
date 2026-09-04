@@ -17,7 +17,8 @@ non-negotiable principles.
 ## Requirements
 
 - Node.js **24** (`nvm use` reads `.nvmrc`)
-- Docker + Docker Compose (for a local MongoDB)
+- A MongoDB Atlas cluster (connection string via `MONGO_URI`) — or, optionally,
+  Docker + Docker Compose to run MongoDB locally instead (legacy path)
 
 ## Setup
 
@@ -34,7 +35,7 @@ Environment variables (validated on boot — a missing/invalid one aborts startu
 | `NODE_ENV`      | no       | `development` | `development` \| `test` \| `production`    |
 | `PORT`          | no       | `3000`        | HTTP port                                  |
 | `HOST`          | no       | `0.0.0.0`     | bind interface                             |
-| `MONGO_URI`     | **yes**  | —             | `mongodb://…` or `mongodb+srv://…`         |
+| `MONGO_URI`     | **yes**  | —             | Atlas `mongodb+srv://…` (or local `mongodb://…`) |
 | `MONGO_DB_NAME` | **yes**  | —             | database name                              |
 | `LOG_LEVEL`     | no       | `info`        | pino level                                 |
 | `ACCESS_TOKEN_SECRET`        | **yes** | —        | HS256 signing secret, ≥ 32 chars           |
@@ -42,25 +43,23 @@ Environment variables (validated on boot — a missing/invalid one aborts startu
 | `AUTH_RATE_LIMIT_WINDOW_MS`  | no      | `900000` | rate-limit window in ms (15 min)           |
 | `OPEN_LIBRARY_BASE_URL`      | no      | `https://openlibrary.org` | book search/lookup base URL   |
 | `OPEN_LIBRARY_TIMEOUT_MS`    | no      | `5000`   | Open Library request timeout in ms         |
-| `MONGO_PORT`    | no       | `27017`       | `docker-compose` only, not read by the app |
+| `MONGO_PORT`    | no       | `27017`       | `docker-compose` only (legacy local MongoDB), not read by the app |
 
 ## Run
 
 ```bash
-docker compose up -d          # local MongoDB (healthcheck: docker compose ps)
 pnpm dev                    # tsx watch, structured logs with reqId
 ```
+
+`MONGO_URI` in `.env` points at your Atlas cluster, so there's no local
+container to start. (Legacy path: `docker compose up -d` still works if you'd
+rather point `MONGO_URI` at a local `mongodb://localhost:27017` instead.)
 
 Check it:
 
 ```bash
 curl -i localhost:3000/health
 # 200 {"status":"ok","db":"up","uptime":<n>}
-
-docker compose stop mongo
-curl -i localhost:3000/health
-# 503 {"status":"degraded","db":"down","uptime":<n>}   (process stays up)
-docker compose start mongo
 ```
 
 `GET /health` echoes an incoming `x-request-id` header back on the response and
