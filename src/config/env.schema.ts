@@ -22,6 +22,11 @@ export const envSchema = z
       .min(1)
       .regex(/^[^/\\. "$]+$/, 'must not contain any of: / \\ . " $'),
     LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
+    ACCESS_TOKEN_SECRET: z
+      .string()
+      .min(32, 'must be at least 32 characters (HS256 signing secret)'),
+    AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10),
+    AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(900_000),
   })
   .transform((raw) => ({
     nodeEnv: raw.NODE_ENV,
@@ -30,6 +35,9 @@ export const envSchema = z
     mongoUri: raw.MONGO_URI,
     mongoDbName: raw.MONGO_DB_NAME,
     logLevel: raw.LOG_LEVEL,
+    accessTokenSecret: raw.ACCESS_TOKEN_SECRET,
+    authRateLimitMax: raw.AUTH_RATE_LIMIT_MAX,
+    authRateLimitWindowMs: raw.AUTH_RATE_LIMIT_WINDOW_MS,
   }));
 
 export type AppConfig = z.infer<typeof envSchema>;
