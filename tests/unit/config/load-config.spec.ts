@@ -32,7 +32,40 @@ describe('loadConfig', () => {
       accessTokenSecret: 'test-access-token-secret-0123456789abcdef',
       authRateLimitMax: 10,
       authRateLimitWindowMs: 900_000,
+      openLibraryBaseUrl: 'https://openlibrary.org',
+      openLibraryTimeoutMs: 5000,
     });
+  });
+
+  it('coerces the Open Library knobs and honours provided values', () => {
+    const config = loadConfig({
+      ...validEnv,
+      OPEN_LIBRARY_BASE_URL: 'http://stub.local:9999',
+      OPEN_LIBRARY_TIMEOUT_MS: '1500',
+    });
+
+    expect(config.openLibraryBaseUrl).toBe('http://stub.local:9999');
+    expect(config.openLibraryTimeoutMs).toBe(1500);
+  });
+
+  it('exits when OPEN_LIBRARY_BASE_URL is not a URL', () => {
+    const exit = stubExit();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(() => loadConfig({ ...validEnv, OPEN_LIBRARY_BASE_URL: 'not-a-url' })).toThrow(
+      'process.exit called',
+    );
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+
+  it('exits when OPEN_LIBRARY_TIMEOUT_MS is below the minimum', () => {
+    const exit = stubExit();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(() => loadConfig({ ...validEnv, OPEN_LIBRARY_TIMEOUT_MS: '10' })).toThrow(
+      'process.exit called',
+    );
+    expect(exit).toHaveBeenCalledWith(1);
   });
 
   it('coerces PORT and honours provided values', () => {

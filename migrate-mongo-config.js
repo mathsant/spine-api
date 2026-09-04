@@ -23,6 +23,10 @@ const config = {
   migrationsDir: 'migrations',
   changelogCollectionName: 'changelog',
   lockCollectionName: 'changelog_lock',
+  // migrate-mongo's lock collection needs an explicit positive TTL (seconds) to build
+  // its expiry index; single-instance MVP (no concurrent migration runners), so this
+  // just bounds how long a crashed run would hold the lock.
+  lockTtl: 600,
   migrationFileExtension: '.js',
   useFileHash: false,
   moduleSystem: 'commonjs',

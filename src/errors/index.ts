@@ -13,3 +13,8 @@ export { InvalidRefreshTokenError } from './invalid-refresh-token-error';
 export { RefreshTokenExpiredError } from './refresh-token-expired-error';
 export { RefreshTokenReuseDetectedError } from './refresh-token-reuse-detected-error';
 export { TooManyRequestsError } from './too-many-requests-error';
+export { BookNotFoundError } from './book-not-found-error';
+export { OpenLibraryUnavailableError } from './open-library-unavailable-error';
+export { ReadingSessionNotFoundError } from './reading-session-not-found-error';
+export { InvalidReadingSessionStateError } from './invalid-reading-session-state-error';
+export { InvalidReadingSessionDatesError } from './invalid-reading-session-dates-error';

@@ -7,7 +7,9 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastif
 import type { AppConfig } from './config';
 import { registerContainer } from './container';
 import { authRoutes } from './controllers/auth';
+import { booksRoutes } from './controllers/books';
 import { healthRoutes } from './controllers/health';
+import { readingSessionsRoutes } from './controllers/reading-sessions';
 import { TooManyRequestsError } from './errors';
 import { registerAuthentication, registerErrorHandler } from './http';
 
@@ -76,6 +78,8 @@ export async function buildApp(
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/v1', appConfig: config });
+  await app.register(booksRoutes, { prefix: '/v1' });
+  await app.register(readingSessionsRoutes, { prefix: '/v1' });
   await app.ready();
 
   return app;

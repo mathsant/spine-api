@@ -1,0 +1,228 @@
+import type { FastifyInstance } from 'fastify';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+import { signAccessToken } from '../../../src/auth';
+import { buildApp } from '../../../src/app';
+import type { AppConfig } from '../../../src/config';
+import { MongoUserRepository } from '../../../src/repositories/users';
+import { ensureAuthIndexes } from '../../helpers/auth-indexes';
+import { ensureBookIndexes } from '../../helpers/book-indexes';
+import { testConfig } from '../../helpers/config';
+import { type MongoMemory, startMongoMemory } from '../../helpers/mongo-memory';
+import { type OpenLibraryStub, startOpenLibraryStub } from '../../helpers/open-library-stub';
+
+const DB_NAME = 'books_routes_test';
+const SECRET = testConfig().accessTokenSecret;
+const STUB_DOC = {
+  key: '/works/OL_STUB_W',
+  title: 'Stub Book',
+  author_name: ['Stub Author'],
+  cover_i: 1,
+  first_publish_year: 2000,
+  isbn: ['9780000000001'],
+};
+
+describe('books routes (integration)', () => {
+  let mongo: MongoMemory;
+  let openLibrary: OpenLibraryStub;
+  let apps: FastifyInstance[] = [];
+  let auth: string;
+
+  beforeAll(async () => {
+    mongo = await startMongoMemory();
+    const db = mongo.client.db(DB_NAME);
+    await ensureAuthIndexes(db);
+    await ensureBookIndexes(db);
+
+    const user = await new MongoUserRepository(db).create({
+      email: 'reader@example.com',
+      passwordHash: 'scrypt$1$1$1$c2FsdA==$aGFzaA==',
+      handle: 'reader',
+      displayName: 'Reader',
+    });
+    auth = `Bearer ${signAccessToken({ userId: user.id }, SECRET)}`;
+
+    openLibrary = await startOpenLibraryStub([STUB_DOC]);
+  });
+
+  afterAll(async () => {
+    await mongo.stop();
+    await openLibrary.close();
+  });
+
+  beforeEach(async () => {
+    openLibrary.setDocs([STUB_DOC]);
+    const db = mongo.client.db(DB_NAME);
+    await Promise.all(
+      ['books', 'shelf_memberships', 'reading_sessions'].map((c) => db.collection(c).deleteMany({})),
+    );
+  });
+
+  afterEach(async () => {
+    await Promise.all(apps.map((a) => a.close()));
+    apps = [];
+  });
+
+  async function build(overrides: Partial<AppConfig> = {}): Promise<FastifyInstance> {
+    const app = await buildApp(
+      testConfig({
+        mongoUri: mongo.uri,
+        mongoDbName: DB_NAME,
+        openLibraryBaseUrl: openLibrary.baseUrl,
+        ...overrides,
+      }),
+    );
+    apps.push(app);
+    return app;
+  }
+
+  async function seedBook(app: FastifyInstance): Promise<string> {
+    const search = await app.inject({
+      method: 'GET',
+      url: '/v1/books/search?q=stub',
+      headers: { authorization: auth },
+    });
+    return (search.json().items[0] as { olid: string }).olid;
+  }
+
+  // ---- search --------------------------------------------------------------
+
+  it('search: 200 with paginated results', async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/books/search?q=stub',
+      headers: { authorization: auth },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ page: 1, limit: 20 });
+    expect(body.items[0]).toMatchObject({ olid: 'OL_STUB_W', title: 'Stub Book' });
+  });
+
+  it('search: 400 when q is missing', async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/books/search',
+      headers: { authorization: auth },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('search: 401 without a bearer token', async () => {
+    const app = await build();
+    const res = await app.inject({ method: 'GET', url: '/v1/books/search?q=stub' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('search: 503 when Open Library is unreachable', async () => {
+    const app = await build({ openLibraryBaseUrl: 'http://127.0.0.1:1', openLibraryTimeoutMs: 200 });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/books/search?q=stub',
+      headers: { authorization: auth },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error.code).toBe('OPEN_LIBRARY_UNAVAILABLE');
+  });
+
+  // ---- detail / cache-on-read ------------------------------------------
+
+  it('detail: 200 caches the book on first interaction', async () => {
+    const app = await build();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/books/OL_STUB_W',
+      headers: { authorization: auth },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      olid: 'OL_STUB_W',
+      aggregates: { averageRating: null, reviewCount: 0, readerCount: 0 },
+    });
+  });
+
+  it('detail: 404 for an unknown olid', async () => {
+    openLibrary.setDocs([]);
+    const app = await build();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/books/OL_DOES_NOT_EXIST_W',
+      headers: { authorization: auth },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe('BOOK_NOT_FOUND');
+  });
+
+  // ---- want-to-read -------------------------------------------------------
+
+  it('want-to-read: mark then list then unmark, all idempotent (RF-005, RF-006, RF-007)', async () => {
+    const app = await build();
+    const olid = await seedBook(app);
+
+    const markUrl = `/v1/books/${olid}/want-to-read`;
+    const markOnce = await app.inject({ method: 'PUT', url: markUrl, headers: { authorization: auth } });
+    const markTwice = await app.inject({ method: 'PUT', url: markUrl, headers: { authorization: auth } });
+    expect(markOnce.statusCode).toBe(204);
+    expect(markTwice.statusCode).toBe(204);
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/v1/me/want-to-read',
+      headers: { authorization: auth },
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().items).toHaveLength(1);
+    expect(list.json().items[0].olid).toBe(olid);
+
+    const unmarkOnce = await app.inject({ method: 'DELETE', url: markUrl, headers: { authorization: auth } });
+    const unmarkTwice = await app.inject({ method: 'DELETE', url: markUrl, headers: { authorization: auth } });
+    expect(unmarkOnce.statusCode).toBe(204);
+    expect(unmarkTwice.statusCode).toBe(204);
+
+    const listAfter = await app.inject({
+      method: 'GET',
+      url: '/v1/me/want-to-read',
+      headers: { authorization: auth },
+    });
+    expect(listAfter.json().items).toHaveLength(0);
+  });
+
+  it('want-to-read: unmarking a book that was never cached is still 204', async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/v1/books/OL_NEVER_SEEN_W/want-to-read',
+      headers: { authorization: auth },
+    });
+    expect(res.statusCode).toBe(204);
+  });
+
+  it('start-reading removes the book from want_to_read (RF-010)', async () => {
+    const app = await build();
+    const olid = await seedBook(app);
+
+    await app.inject({
+      method: 'PUT',
+      url: `/v1/books/${olid}/want-to-read`,
+      headers: { authorization: auth },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/v1/books/${olid}/start-reading`,
+      headers: { authorization: auth },
+    });
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/v1/me/want-to-read',
+      headers: { authorization: auth },
+    });
+    expect(list.json().items).toHaveLength(0);
+  });
+});

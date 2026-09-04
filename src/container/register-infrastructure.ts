@@ -2,6 +2,7 @@ import { asFunction, asValue, type AwilixContainer } from 'awilix';
 
 import type { AppConfig } from '../config';
 import { createMongoClient } from '../db';
+import { HttpOpenLibraryClient } from '../integrations/open-library';
 import type { AppCradle } from './cradle';
 
 /**
@@ -21,6 +22,13 @@ export function registerInfrastructure(
       .disposer((client) => client.close()),
     db: asFunction((cradle: AppCradle) =>
       cradle.mongoClient.db(cradle.config.mongoDbName),
+    ).singleton(),
+    openLibraryClient: asFunction(
+      (cradle: AppCradle) =>
+        new HttpOpenLibraryClient({
+          baseUrl: cradle.config.openLibraryBaseUrl,
+          timeoutMs: cradle.config.openLibraryTimeoutMs,
+        }),
     ).singleton(),
   });
 }

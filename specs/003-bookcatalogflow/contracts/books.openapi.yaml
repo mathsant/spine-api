@@ -1,0 +1,350 @@
+openapi: 3.1.0
+info:
+  title: better-books — books flow
+  version: 0.1.0
+  description: >
+    Contrato dos endpoints de busca/cache de livros, want_to_read e reading sessions
+    entregues pela feature 003-bookcatalogflow. Referência: spec RF-001..RF-020. Todos sob
+    o prefixo /v1 e exigem `Authorization: Bearer <accessToken>` (RF-020 — todo endpoint
+    opera só sobre o usuário autenticado).
+
+servers:
+  - url: /v1
+
+security:
+  - bearerAuth: []
+
+paths:
+  /books/search:
+    get:
+      operationId: searchBooks
+      summary: Busca livros por título e/ou autor no Open Library (RF-001).
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        "200":
+          description: Página de resultados.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BookSearchPage" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/OpenLibraryUnavailable" }
+
+  /books/{olid}:
+    get:
+      operationId: getBook
+      summary: Detalhe de um livro (cache-on-read — RF-003, RF-004).
+      parameters:
+        - { $ref: "#/components/parameters/Olid" }
+      responses:
+        "200":
+          description: Livro cacheado (gravado agora, se era a primeira interação).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BookDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/BookNotFound" }
+        "503": { $ref: "#/components/responses/OpenLibraryUnavailable" }
+
+  /books/{olid}/want-to-read:
+    put:
+      operationId: markWantToRead
+      summary: Marca "quero ler" (idempotente — RF-005). Cacheia o livro se ainda não estiver.
+      parameters:
+        - { $ref: "#/components/parameters/Olid" }
+      responses:
+        "204": { description: Marcado (ou já estava marcado). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/BookNotFound" }
+        "503": { $ref: "#/components/responses/OpenLibraryUnavailable" }
+    delete:
+      operationId: unmarkWantToRead
+      summary: Remove "quero ler" (idempotente — RF-006). Nunca cacheia nem chama o Open Library.
+      parameters:
+        - { $ref: "#/components/parameters/Olid" }
+      responses:
+        "204": { description: Removido (ou já não estava marcado / livro nunca foi cacheado). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /books/{olid}/start-reading:
+    post:
+      operationId: startReading
+      summary: >
+        Inicia a leitura (RF-008). Se já houver session `reading` aberta pra esse livro,
+        reaproveita em vez de criar outra (RF-009). Remove de want_to_read se presente
+        (RF-010).
+      parameters:
+        - { $ref: "#/components/parameters/Olid" }
+      responses:
+        "200": { description: Session `reading` já aberta reaproveitada., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "201": { description: Nova session `reading` criada., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/BookNotFound" }
+        "503": { $ref: "#/components/responses/OpenLibraryUnavailable" }
+
+  /books/{olid}/mark-finished:
+    post:
+      operationId: markFinished
+      summary: >
+        Marca como lido diretamente, sem exigir session `reading` prévia (RF-014). Sempre
+        cria uma nova session (permite releitura — RF-016). Remove de want_to_read se
+        presente (RF-010).
+      parameters:
+        - { $ref: "#/components/parameters/Olid" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarkFinishedRequest" }
+      responses:
+        "201": { description: Session `finished` criada., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/BookNotFound" }
+        "503": { $ref: "#/components/responses/OpenLibraryUnavailable" }
+
+  /me/want-to-read:
+    get:
+      operationId: listWantToRead
+      summary: Lista os livros marcados como "quero ler" pelo usuário autenticado (RF-007).
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/InternalLimit" }
+      responses:
+        "200":
+          description: Página do cursor.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BookCursorPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /me/reading-sessions:
+    get:
+      operationId: listReadingSessions
+      summary: Histórico paginado de reading sessions do usuário autenticado (RF-019).
+      parameters:
+        - { name: bookId, in: query, required: false, schema: { type: string } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/InternalLimit" }
+      responses:
+        "200":
+          description: Página do cursor.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadingSessionCursorPage" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /reading-sessions/{sessionId}/progress:
+    post:
+      operationId: updateReadingSessionProgress
+      summary: Registra a página atual numa session `reading` (RF-011, RF-012, RF-013).
+      parameters:
+        - { $ref: "#/components/parameters/SessionId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProgressRequest" }
+      responses:
+        "200": { description: Progresso atualizado., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/ReadingSessionNotFound" }
+        "409": { $ref: "#/components/responses/InvalidReadingSessionState" }
+
+  /reading-sessions/{sessionId}/finish:
+    post:
+      operationId: finishReadingSession
+      summary: Finaliza uma session `reading` (RF-015). Remove de want_to_read se presente (RF-010).
+      parameters:
+        - { $ref: "#/components/parameters/SessionId" }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FinishReadingSessionRequest" }
+      responses:
+        "200": { description: Session finalizada., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/ReadingSessionNotFound" }
+
+  /reading-sessions/{sessionId}:
+    patch:
+      operationId: editReadingSession
+      summary: Corrige datas e/ou página atual de uma session existente (RF-017).
+      parameters:
+        - { $ref: "#/components/parameters/SessionId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditReadingSessionRequest" }
+      responses:
+        "200": { description: Session atualizada., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/ReadingSessionNotFound" }
+        "422": { $ref: "#/components/responses/InvalidReadingSessionDates" }
+    delete:
+      operationId: deleteReadingSession
+      summary: Apaga uma session (RF-018).
+      parameters:
+        - { $ref: "#/components/parameters/SessionId" }
+      responses:
+        "204": { description: Apagada. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/ReadingSessionNotFound" }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: opaque-app-jwt }
+
+  parameters:
+    Olid:
+      name: olid
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+    InternalLimit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            statusCode: { type: integer }
+            details: {}
+          required: [code, message, statusCode]
+      required: [error]
+
+    BookSearchResult:
+      type: object
+      properties:
+        olid: { type: string }
+        isbn13: { type: [string, "null"] }
+        title: { type: string }
+        authors: { type: array, items: { type: string } }
+        coverUrl: { type: [string, "null"] }
+        firstPublishYear: { type: [integer, "null"] }
+      required: [olid, isbn13, title, authors, coverUrl, firstPublishYear]
+
+    BookSearchPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/BookSearchResult" } }
+        page: { type: integer }
+        limit: { type: integer }
+        totalItems: { type: integer }
+      required: [items, page, limit, totalItems]
+
+    BookDetail:
+      allOf:
+        - $ref: "#/components/schemas/BookSearchResult"
+        - type: object
+          properties:
+            id: { type: string }
+            aggregates:
+              type: object
+              properties:
+                averageRating: { type: [number, "null"] }
+                reviewCount: { type: integer }
+                readerCount: { type: integer }
+              required: [averageRating, reviewCount, readerCount]
+          required: [id, aggregates]
+
+    BookCursorPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/BookSearchResult" } }
+        nextCursor: { type: [string, "null"] }
+      required: [items, nextCursor]
+
+    ReadingSession:
+      type: object
+      properties:
+        id: { type: string }
+        bookId: { type: string }
+        status: { type: string, enum: [reading, finished] }
+        startedAt: { type: [string, "null"], format: date-time }
+        finishedAt: { type: [string, "null"], format: date-time }
+        currentPage: { type: [integer, "null"] }
+        createdAt: { type: string, format: date-time }
+      required: [id, bookId, status, startedAt, finishedAt, currentPage, createdAt]
+
+    ReadingSessionCursorPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ReadingSession" } }
+        nextCursor: { type: [string, "null"] }
+      required: [items, nextCursor]
+
+    MarkFinishedRequest:
+      type: object
+      properties:
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+      required: [finishedAt]
+
+    UpdateProgressRequest:
+      type: object
+      properties:
+        currentPage: { type: integer, minimum: 1 }
+      required: [currentPage]
+
+    FinishReadingSessionRequest:
+      type: object
+      properties:
+        finishedAt: { type: string, format: date-time }
+
+    EditReadingSessionRequest:
+      type: object
+      minProperties: 1
+      properties:
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+        currentPage: { type: integer, minimum: 1 }
+
+  responses:
+    ValidationError:
+      description: VALIDATION_ERROR — corpo/querystring reprovado pelo schema zod.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    Unauthenticated:
+      description: UNAUTHENTICATED — sem Bearer válido.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    BookNotFound:
+      description: BOOK_NOT_FOUND — olid não existe nem no cache nem no Open Library.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    OpenLibraryUnavailable:
+      description: OPEN_LIBRARY_UNAVAILABLE — timeout/erro de rede/5xx do Open Library.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    ReadingSessionNotFound:
+      description: READING_SESSION_NOT_FOUND — não existe ou pertence a outro usuário.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    InvalidReadingSessionState:
+      description: INVALID_READING_SESSION_STATE — progress update numa session não-`reading`.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    InvalidReadingSessionDates:
+      description: INVALID_READING_SESSION_DATES — edição resultaria em finishedAt < startedAt.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }

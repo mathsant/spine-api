@@ -12,6 +12,8 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     accessTokenSecret: 'integration-test-access-token-secret-0123456789',
     authRateLimitMax: 10,
     authRateLimitWindowMs: 900_000,
+    openLibraryBaseUrl: 'https://openlibrary.org',
+    openLibraryTimeoutMs: 5000,
     ...overrides,
   };
 }
