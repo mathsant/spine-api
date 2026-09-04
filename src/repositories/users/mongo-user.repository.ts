@@ -1,7 +1,13 @@
 import { type Db, MongoServerError, ObjectId } from 'mongodb';
 
 import { EmailAlreadyInUseError, HandleAlreadyInUseError } from '../../errors';
-import type { CreateUserInput, UserRecord, UserRepository } from './user.repository';
+import type {
+  CreateUserInput,
+  UpdateProfileInput,
+  UserRecord,
+  UserRepository,
+  UserSearchPage,
+} from './user.repository';
 
 interface UserDocument {
   _id: ObjectId;
@@ -9,6 +15,7 @@ interface UserDocument {
   passwordHash: string;
   handle: string;
   displayName: string;
+  bio?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,6 +29,7 @@ function toRecord(doc: UserDocument): UserRecord {
     passwordHash: doc.passwordHash,
     handle: doc.handle,
     displayName: doc.displayName,
+    bio: doc.bio ?? null,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -42,6 +50,7 @@ export class MongoUserRepository implements UserRepository {
       passwordHash: input.passwordHash,
       handle: input.handle,
       displayName: input.displayName,
+      bio: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -88,5 +97,40 @@ export class MongoUserRepository implements UserRepository {
       { _id: new ObjectId(id) },
       { $set: { passwordHash, updatedAt: now } },
     );
+  }
+
+  async updateProfile(id: string, patch: UpdateProfileInput, now: Date): Promise<UserRecord> {
+    const objectId = new ObjectId(id);
+    await this.users.updateOne(
+      { _id: objectId },
+      { $set: { ...patch, updatedAt: now } },
+    );
+    const doc = await this.users.findOne({ _id: objectId });
+    if (!doc) {
+      throw new Error(`User ${id} not found after updateProfile`);
+    }
+    return toRecord(doc);
+  }
+
+  async search(query: string, page: number, limit: number): Promise<UserSearchPage> {
+    const filter = { $text: { $search: query } };
+    const skip = (page - 1) * limit;
+
+    const [docs, totalItems] = await Promise.all([
+      this.users
+        .find(filter, { projection: { score: { $meta: 'textScore' } } })
+        .sort({ score: { $meta: 'textScore' } })
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
+      this.users.countDocuments(filter),
+    ]);
+
+    return {
+      items: docs.map((doc) => ({ id: doc._id.toHexString(), handle: doc.handle, displayName: doc.displayName })),
+      page,
+      limit,
+      totalItems,
+    };
   }
 }

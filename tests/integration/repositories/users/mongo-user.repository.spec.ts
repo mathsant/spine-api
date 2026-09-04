@@ -83,4 +83,57 @@ describe('MongoUserRepository (integration)', () => {
     expect(reloaded?.passwordHash).toBe('scrypt$1$1$1$bmV3$bmV3');
     expect(reloaded?.updatedAt.getTime()).toBe(later.getTime());
   });
+
+  it('creates a user with bio: null by default', async () => {
+    const record = await repo.create(input);
+    expect(record.bio).toBeNull();
+  });
+
+  it('updateProfile only touches the keys present in patch, plus updatedAt', async () => {
+    const created = await repo.create(input);
+    const later = new Date(created.updatedAt.getTime() + 1000);
+
+    const afterBio = await repo.updateProfile(created.id, { bio: 'Reading sci-fi' }, later);
+    expect(afterBio.bio).toBe('Reading sci-fi');
+    expect(afterBio.displayName).toBe('Alice');
+    expect(afterBio.updatedAt.getTime()).toBe(later.getTime());
+
+    const evenLater = new Date(later.getTime() + 1000);
+    const afterDisplayName = await repo.updateProfile(
+      created.id,
+      { displayName: 'Alice Reader' },
+      evenLater,
+    );
+    expect(afterDisplayName.displayName).toBe('Alice Reader');
+    expect(afterDisplayName.bio).toBe('Reading sci-fi');
+    expect(afterDisplayName.email).toBe('alice@example.com');
+    expect(afterDisplayName.handle).toBe('alice');
+  });
+
+  it('search finds by displayName and by handle, ranked by relevance, paginated', async () => {
+    // MongoDB $text matches whole tokens, not substrings — "reader" matches a "Reader" word,
+    // not an unbroken token like "bobreader" that merely contains those letters.
+    await repo.create({ ...input, email: 'alice@example.com', handle: 'alice', displayName: 'Alice Reader' });
+    await repo.create({ ...input, email: 'bob@example.com', handle: 'bobreader', displayName: 'Bob Reader' });
+    await repo.create({ ...input, email: 'carol@example.com', handle: 'carol', displayName: 'Carol' });
+
+    const byDisplayName = await repo.search('Alice', 1, 20);
+    expect(byDisplayName.items).toHaveLength(1);
+    expect(byDisplayName.items[0]).toMatchObject({ handle: 'alice', displayName: 'Alice Reader' });
+    expect(byDisplayName.totalItems).toBe(1);
+
+    const byHandle = await repo.search('bobreader', 1, 20);
+    expect(byHandle.items).toHaveLength(1);
+    expect(byHandle.items[0]).toMatchObject({ handle: 'bobreader' });
+
+    const paged = await repo.search('reader', 1, 1);
+    expect(paged.items).toHaveLength(1);
+    expect(paged.totalItems).toBe(2);
+    expect(paged.page).toBe(1);
+    expect(paged.limit).toBe(1);
+
+    const noMatch = await repo.search('nonexistent-term-xyz', 1, 20);
+    expect(noMatch.items).toEqual([]);
+    expect(noMatch.totalItems).toBe(0);
+  });
 });

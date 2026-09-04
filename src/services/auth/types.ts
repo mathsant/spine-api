@@ -6,6 +6,7 @@ export interface PublicUser {
   email: string;
   handle: string;
   displayName: string;
+  bio: string | null;
   createdAt: Date;
 }
 
@@ -23,6 +24,7 @@ export function toPublicUser(user: UserRecord): PublicUser {
     email: user.email,
     handle: user.handle,
     displayName: user.displayName,
+    bio: user.bio,
     createdAt: user.createdAt,
   };
 }
