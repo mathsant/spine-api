@@ -1,0 +1,345 @@
+### books.http — feature 003-bookcatalogflow (extensão VS Code: humao.rest-client)
+#
+# Clique em "Send Request" acima de cada requisição, de cima para baixo.
+# Os blocos "# @name x" nomeiam a resposta; as linhas "@var = {{x.response.body.$.campo}}"
+# encadeiam olid/sessionId/tokens automaticamente, igual ao auth.http.
+#
+# Pré-requisito: docker compose up -d  &&  pnpm migrate:up  &&  pnpm dev
+# Para repetir do zero: docker compose down -v && docker compose up -d && pnpm migrate:up
+#
+# A busca (Fase 1) chama o Open Library de verdade (OPEN_LIBRARY_BASE_URL do .env.example
+# aponta pra https://openlibrary.org) — precisa de rede. Sem rede, aponte
+# OPEN_LIBRARY_BASE_URL pra um stub local antes de "pnpm dev" (ver quickstart.md passo 9).
+
+@base = http://localhost:3000
+@contentType = application/json
+
+### saúde
+GET {{base}}/health
+
+
+###############################################################################
+# Setup — conta + login (feature 002), só pra ter um Bearer nas fases seguintes
+###############################################################################
+
+### 0.1 — cadastro (409 se já existir — sem problema, é só setup)
+POST {{base}}/v1/auth/signup
+Content-Type: {{contentType}}
+
+{
+  "email": "reader@example.com",
+  "password": "correct horse battery",
+  "handle": "reader",
+  "displayName": "Reader"
+}
+
+### 0.2 — login
+# @name login
+POST {{base}}/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "reader@example.com",
+  "password": "correct horse battery"
+}
+
+@accessToken = {{login.response.body.$.accessToken}}
+
+### 0.3 — segunda conta, só pra exercitar posse de session na Fase 8 (D9)
+POST {{base}}/v1/auth/signup
+Content-Type: {{contentType}}
+
+{
+  "email": "other-reader@example.com",
+  "password": "another strong pass",
+  "handle": "otherreader",
+  "displayName": "Other Reader"
+}
+
+### 0.4 — login da segunda conta
+# @name loginOther
+POST {{base}}/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "other-reader@example.com",
+  "password": "another strong pass"
+}
+
+@otherAccessToken = {{loginOther.response.body.$.accessToken}}
+
+
+###############################################################################
+# Fase 1 — Busca · GET /v1/books/search   (RF-001, RF-002)
+###############################################################################
+
+### 1.1 — 200 OK: lista paginada (captura o olid do primeiro resultado)
+# @name search
+GET {{base}}/v1/books/search?q=dune&page=1&limit=5
+Authorization: Bearer {{accessToken}}
+
+@olid = {{search.response.body.$.items[0].olid}}
+
+### 1.2 — 400 VALIDATION_ERROR (q ausente)
+GET {{base}}/v1/books/search
+Authorization: Bearer {{accessToken}}
+
+### 1.3 — 401 UNAUTHENTICATED (sem Bearer)
+GET {{base}}/v1/books/search?q=dune
+
+# 503 OPEN_LIBRARY_UNAVAILABLE não dá pra exercitar aqui sem derrubar a rede —
+# coberto por teste de integração e pelo passo 9 do quickstart.md.
+
+
+###############################################################################
+# Fase 2 — Detalhe (cache-on-read) · GET /v1/books/:olid   (RF-003, RF-004)
+###############################################################################
+
+### 2.1 — 200 OK: grava no cache local na primeira interação; aggregates zerados
+GET {{base}}/v1/books/{{olid}}
+Authorization: Bearer {{accessToken}}
+
+### 2.2 — 200 OK de novo: já vem do cache local (sem nova chamada ao Open Library)
+GET {{base}}/v1/books/{{olid}}
+Authorization: Bearer {{accessToken}}
+
+### 2.3 — 404 BOOK_NOT_FOUND (olid que não existe nem no cache nem no Open Library)
+GET {{base}}/v1/books/OL_DOES_NOT_EXIST_XYZW
+Authorization: Bearer {{accessToken}}
+
+
+###############################################################################
+# Fase 3 — want_to_read · PUT/DELETE /v1/books/:olid/want-to-read, GET /v1/me/want-to-read
+# (RF-005, RF-006, RF-007 — tudo idempotente)
+###############################################################################
+
+### 3.1 — 204: marca "quero ler"
+PUT {{base}}/v1/books/{{olid}}/want-to-read
+Authorization: Bearer {{accessToken}}
+
+### 3.2 — 204 de novo (idempotente — não duplica)
+PUT {{base}}/v1/books/{{olid}}/want-to-read
+Authorization: Bearer {{accessToken}}
+
+### 3.3 — 200: lista "quero ler" (deve conter o livro acima)
+GET {{base}}/v1/me/want-to-read
+Authorization: Bearer {{accessToken}}
+
+### 3.4 — 204: remove "quero ler"
+DELETE {{base}}/v1/books/{{olid}}/want-to-read
+Authorization: Bearer {{accessToken}}
+
+### 3.5 — 204 de novo (idempotente — já não estava marcado)
+DELETE {{base}}/v1/books/{{olid}}/want-to-read
+Authorization: Bearer {{accessToken}}
+
+### 3.6 — 204 pra um livro que nunca foi cacheado (não chama o Open Library — D3)
+DELETE {{base}}/v1/books/OL_NEVER_SEEN_XYZW/want-to-read
+Authorization: Bearer {{accessToken}}
+
+### 3.7 — confirma que a lista voltou a ficar vazia
+GET {{base}}/v1/me/want-to-read
+Authorization: Bearer {{accessToken}}
+
+
+###############################################################################
+# Fase 4 — Iniciar leitura · POST /v1/books/:olid/start-reading
+# (RF-008, RF-009, RF-010)
+###############################################################################
+
+### 4.0 — marca "quero ler" de novo só pra testar a remoção automática abaixo
+PUT {{base}}/v1/books/{{olid}}/want-to-read
+Authorization: Bearer {{accessToken}}
+
+### 4.1 — 201 Created: nova reading session `reading`
+# @name startReading
+POST {{base}}/v1/books/{{olid}}/start-reading
+Authorization: Bearer {{accessToken}}
+
+@sessionId = {{startReading.response.body.$.id}}
+
+### 4.2 — want_to_read foi removido automaticamente (RF-010) — lista deve vir vazia
+GET {{base}}/v1/me/want-to-read
+Authorization: Bearer {{accessToken}}
+
+### 4.3 — 200 OK (não 201): reaproveita a session já aberta em vez de criar outra (RF-009)
+POST {{base}}/v1/books/{{olid}}/start-reading
+Authorization: Bearer {{accessToken}}
+
+
+###############################################################################
+# Fase 5 — Progresso · POST /v1/reading-sessions/:sessionId/progress
+# (RF-011, RF-012, RF-013)
+###############################################################################
+
+### 5.1 — 200 OK: sobrescreve a página atual
+POST {{base}}/v1/reading-sessions/{{sessionId}}/progress
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPage": 120
+}
+
+### 5.2 — 400 VALIDATION_ERROR (página não-positiva)
+POST {{base}}/v1/reading-sessions/{{sessionId}}/progress
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPage": 0
+}
+
+### 5.3 — sem limite superior: aceita uma página bem além do total do livro (RF-013)
+POST {{base}}/v1/reading-sessions/{{sessionId}}/progress
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPage": 999999
+}
+
+
+###############################################################################
+# Fase 6 — Finalizar · POST /v1/reading-sessions/:sessionId/finish
+# (RF-015 + caso de borda: idempotente se já finished)
+###############################################################################
+
+### 6.1 — 200 OK: status -> finished, finishedAt = agora (corpo vazio)
+POST {{base}}/v1/reading-sessions/{{sessionId}}/finish
+Authorization: Bearer {{accessToken}}
+
+### 6.2 — 200 OK de novo: idempotente, só atualiza finishedAt
+POST {{base}}/v1/reading-sessions/{{sessionId}}/finish
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "finishedAt": "2025-06-01T00:00:00.000Z"
+}
+
+### 6.3 — 409 INVALID_READING_SESSION_STATE: progresso numa session já finished (RF-012)
+POST {{base}}/v1/reading-sessions/{{sessionId}}/progress
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPage": 50
+}
+
+
+###############################################################################
+# Fase 7 — Marcar como lido direto + releitura · POST /v1/books/:olid/mark-finished
+# (RF-014, RF-016)
+###############################################################################
+
+### 7.1 — 201 Created: session finished direta, sem startedAt ("li ano passado" — P10)
+# @name markFinished1
+POST {{base}}/v1/books/{{olid}}/mark-finished
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "finishedAt": "2024-01-10T00:00:00.000Z"
+}
+
+### 7.2 — 400 VALIDATION_ERROR (finishedAt ausente)
+POST {{base}}/v1/books/{{olid}}/mark-finished
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{}
+
+### 7.3 — 201 Created de novo: releitura cria uma session NOVA e independente (RF-016)
+# @name markFinished2
+POST {{base}}/v1/books/{{olid}}/mark-finished
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "startedAt": "2025-01-01T00:00:00.000Z",
+  "finishedAt": "2025-01-20T00:00:00.000Z"
+}
+
+@rereadSessionId = {{markFinished2.response.body.$.id}}
+
+
+###############################################################################
+# Fase 8 — Editar / apagar / posse · PATCH, DELETE /v1/reading-sessions/:sessionId
+# (RF-017, RF-018, D9 — session de outro usuário responde 404, nunca 403)
+###############################################################################
+
+### 8.1 — 200 OK: corrige a página atual da releitura
+PATCH {{base}}/v1/reading-sessions/{{rereadSessionId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPage": 42
+}
+
+### 8.2 — 422 INVALID_READING_SESSION_DATES: finishedAt antes de startedAt
+PATCH {{base}}/v1/reading-sessions/{{rereadSessionId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "finishedAt": "2000-01-01T00:00:00.000Z"
+}
+
+### 8.3 — 400 VALIDATION_ERROR (corpo vazio — precisa de ao menos 1 campo)
+PATCH {{base}}/v1/reading-sessions/{{rereadSessionId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{}
+
+### 8.4 — 404 READING_SESSION_NOT_FOUND: outro usuário tentando mexer na session (D9)
+PATCH {{base}}/v1/reading-sessions/{{rereadSessionId}}
+Authorization: Bearer {{otherAccessToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPage": 1
+}
+
+### 8.5 — 404 também no DELETE de outro usuário (não apaga)
+DELETE {{base}}/v1/reading-sessions/{{rereadSessionId}}
+Authorization: Bearer {{otherAccessToken}}
+
+### 8.6 — 204: o dono apaga de verdade
+DELETE {{base}}/v1/reading-sessions/{{rereadSessionId}}
+Authorization: Bearer {{accessToken}}
+
+### 8.7 — 404 em qualquer operação seguinte (já não existe)
+PATCH {{base}}/v1/reading-sessions/{{rereadSessionId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: {{contentType}}
+
+{
+  "currentPage": 1
+}
+
+
+###############################################################################
+# Fase 9 — Histórico paginado · GET /v1/me/reading-sessions   (RF-019)
+###############################################################################
+
+### 9.1 — 200 OK: todas as sessions do usuário (todos os status, incl. a releitura de fase 7)
+GET {{base}}/v1/me/reading-sessions
+Authorization: Bearer {{accessToken}}
+
+### 9.2 — filtra só pelas sessions deste livro
+GET {{base}}/v1/me/reading-sessions?bookId={{startReading.response.body.$.bookId}}
+Authorization: Bearer {{accessToken}}
+
+### 9.3 — paginação: 1 item por página + cursor
+# @name historyPage1
+GET {{base}}/v1/me/reading-sessions?limit=1
+Authorization: Bearer {{accessToken}}
+
+@historyCursor = {{historyPage1.response.body.$.nextCursor}}
+
+### 9.4 — próxima página usando o cursor da resposta anterior
+GET {{base}}/v1/me/reading-sessions?limit=1&cursor={{historyCursor}}
+Authorization: Bearer {{accessToken}}
