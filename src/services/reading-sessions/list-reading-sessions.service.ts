@@ -1,4 +1,5 @@
 import type { ReadingSessionRepository } from '../../repositories/reading-sessions';
+import type { ReviewRepository } from '../../repositories/reviews';
 import { toReadingSessionDTO } from './to-dto';
 import type { ReadingSessionCursorPageDTO } from './types';
 
@@ -13,16 +14,23 @@ export type ListReadingSessions = (input: ListReadingSessionsInput) => Promise<R
 
 export interface ListReadingSessionsDeps {
   readingSessionRepository: ReadingSessionRepository;
+  reviewRepository: ReviewRepository;
 }
 
-/** Paginated history of the user's own reading sessions, optionally filtered by book (RF-019). */
+/**
+ * Paginated history of the user's own reading sessions, optionally filtered by book
+ * (RF-019). Embeds each session's review, if any, via a single batch lookup (RF-010, D5).
+ */
 export const makeListReadingSessions =
-  ({ readingSessionRepository }: ListReadingSessionsDeps): ListReadingSessions =>
+  ({ readingSessionRepository, reviewRepository }: ListReadingSessionsDeps): ListReadingSessions =>
   async ({ userId, bookId, cursor, limit }) => {
     const page = await readingSessionRepository.listByUser(userId, { bookId }, cursor, limit);
 
+    const reviews = await reviewRepository.findBySessionIds(page.items.map((session) => session.id));
+    const reviewBySessionId = new Map(reviews.map((review) => [review.sessionId, review]));
+
     return {
-      items: page.items.map(toReadingSessionDTO),
+      items: page.items.map((session) => toReadingSessionDTO(session, reviewBySessionId.get(session.id) ?? null)),
       nextCursor: page.nextCursor,
     };
   };

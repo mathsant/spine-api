@@ -12,6 +12,7 @@ import { followsRoutes } from './controllers/follows';
 import { healthRoutes } from './controllers/health';
 import { profileRoutes } from './controllers/profile';
 import { readingSessionsRoutes } from './controllers/reading-sessions';
+import { reviewsRoutes } from './controllers/reviews';
 import { usersRoutes } from './controllers/users';
 import { TooManyRequestsError } from './errors';
 import { registerAuthentication, registerErrorHandler } from './http';
@@ -83,6 +84,7 @@ export async function buildApp(
   await app.register(authRoutes, { prefix: '/v1', appConfig: config });
   await app.register(booksRoutes, { prefix: '/v1' });
   await app.register(readingSessionsRoutes, { prefix: '/v1' });
+  await app.register(reviewsRoutes, { prefix: '/v1' });
   await app.register(profileRoutes, { prefix: '/v1' });
   await app.register(usersRoutes, { prefix: '/v1' });
   await app.register(followsRoutes, { prefix: '/v1' });

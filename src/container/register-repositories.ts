@@ -6,6 +6,7 @@ import { MongoFollowRequestRepository } from '../repositories/follow-requests';
 import { MongoFollowRepository } from '../repositories/follows';
 import { MongoHealthRepository } from '../repositories/health';
 import { MongoReadingSessionRepository } from '../repositories/reading-sessions';
+import { MongoReviewRepository } from '../repositories/reviews';
 import { MongoShelfMembershipRepository } from '../repositories/shelf-memberships';
 import { MongoUserRepository } from '../repositories/users';
 import type { AppCradle } from './cradle';
@@ -35,6 +36,9 @@ export function registerRepositories(container: AwilixContainer<AppCradle>): voi
     ).singleton(),
     followRepository: asFunction(
       (cradle: AppCradle) => new MongoFollowRepository(cradle.db),
+    ).singleton(),
+    reviewRepository: asFunction(
+      (cradle: AppCradle) => new MongoReviewRepository(cradle.db),
     ).singleton(),
   });
 }

@@ -1,0 +1,155 @@
+openapi: 3.1.0
+info:
+  title: better-books — reviews flow
+  version: 0.1.0
+  description: >
+    Contrato dos 3 endpoints novos de review e das 2 extensões (detalhe de livro e histórico
+    de reading sessions) entregues pela feature 005-reviews. Referência: spec RF-001..RF-011.
+    Todos sob o prefixo /v1 e exigem `Authorization: Bearer <accessToken>`.
+
+servers:
+  - url: /v1
+
+security:
+  - bearerAuth: []
+
+paths:
+  /reading-sessions/{sessionId}/review:
+    post:
+      operationId: createReview
+      summary: >
+        Cria a review de uma reading session própria `finished` (RF-001). Rejeita se a
+        session não for `finished` (RF-002) ou já tiver review (RF-003).
+      parameters:
+        - { $ref: "#/components/parameters/SessionId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateReviewRequest" }
+      responses:
+        "201":
+          description: Review criada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Review" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/ReadingSessionNotFound" }
+        "409":
+          description: >
+            READING_SESSION_NOT_FINISHED (RF-002) ou REVIEW_ALREADY_EXISTS (RF-003) —
+            distinguidos pelo `code` do corpo.
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+
+  /reviews/{reviewId}:
+    patch:
+      operationId: editReview
+      summary: Edita parcialmente uma review própria — ao menos 1 campo (RF-005).
+      parameters:
+        - { $ref: "#/components/parameters/ReviewId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditReviewRequest" }
+      responses:
+        "200":
+          description: Review atualizada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Review" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/ReviewNotFound" }
+    delete:
+      operationId: deleteReview
+      summary: Apaga uma review própria (RF-006).
+      parameters:
+        - { $ref: "#/components/parameters/ReviewId" }
+      responses:
+        "204": { description: Apagada. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/ReviewNotFound" }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: opaque-app-jwt }
+
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string }
+    ReviewId:
+      name: reviewId
+      in: path
+      required: true
+      schema: { type: string }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            statusCode: { type: integer }
+            details: {}
+          required: [code, message, statusCode]
+      required: [error]
+
+    Review:
+      type: object
+      properties:
+        id: { type: string }
+        sessionId: { type: string }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        text: { type: [string, "null"], maxLength: 2000 }
+        containsSpoiler: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, sessionId, rating, text, containsSpoiler, createdAt, updatedAt]
+
+    CreateReviewRequest:
+      type: object
+      properties:
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        text: { type: string, maxLength: 2000 }
+        containsSpoiler: { type: boolean, default: false }
+      required: [rating]
+
+    EditReviewRequest:
+      type: object
+      minProperties: 1
+      properties:
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        text: { type: [string, "null"], maxLength: 2000 }
+        containsSpoiler: { type: boolean }
+
+  responses:
+    ValidationError:
+      description: VALIDATION_ERROR — corpo reprovado pelo schema zod.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    Unauthenticated:
+      description: UNAUTHENTICATED — sem Bearer válido.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    ReadingSessionNotFound:
+      description: READING_SESSION_NOT_FOUND — não existe ou pertence a outro usuário (D7/D9).
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    ReviewNotFound:
+      description: REVIEW_NOT_FOUND — não existe ou pertence a outro usuário (D7/D9).
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+
+# Extensões de contratos já existentes (003-bookcatalogflow) — não redeclaradas aqui na
+# íntegra, só a diferença de forma:
+#
+# GET /books/{olid} → BookDetail.aggregates.averageRating/reviewCount deixam de ser sempre
+# null/0 e passam a refletir `ReviewRepository.getAggregatesByBook` (RF-009). Forma inalterada.
+#
+# GET /me/reading-sessions → cada item de ReadingSessionCursorPage.items ganha o campo
+# `review: Review | null` (RF-010). Forma anterior sem esse campo deixa de ser o contrato
+# vigente — clientes que ignoram campos desconhecidos não quebram.

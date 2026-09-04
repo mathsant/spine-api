@@ -1,6 +1,7 @@
 import type { OpenLibraryClient } from '../../integrations/open-library';
 import type { BookRecord, BookRepository } from '../../repositories/books';
 import type { ReadingSessionRepository } from '../../repositories/reading-sessions';
+import type { ReviewAggregates, ReviewRepository } from '../../repositories/reviews';
 import { resolveBook } from './resolve-book';
 import type { BookDetailDTO } from './types';
 
@@ -14,9 +15,10 @@ export interface GetBookDeps {
   bookRepository: BookRepository;
   openLibraryClient: OpenLibraryClient;
   readingSessionRepository: ReadingSessionRepository;
+  reviewRepository: ReviewRepository;
 }
 
-function toDTO(book: BookRecord, readerCount: number): BookDetailDTO {
+function toDTO(book: BookRecord, reviewAggregates: ReviewAggregates, readerCount: number): BookDetailDTO {
   return {
     id: book.id,
     olid: book.olid,
@@ -25,20 +27,27 @@ function toDTO(book: BookRecord, readerCount: number): BookDetailDTO {
     authors: book.authors,
     coverUrl: book.coverUrl,
     firstPublishYear: book.firstPublishYear,
-    aggregates: { averageRating: null, reviewCount: 0, readerCount },
+    aggregates: {
+      averageRating: reviewAggregates.averageRating,
+      reviewCount: reviewAggregates.reviewCount,
+      readerCount,
+    },
   };
 }
 
 /**
  * Cache-on-read: resolves the book from the local cache, or from Open Library on a
- * cache miss (caching it for next time — RF-003, RF-004). Review is out of scope, so
- * `averageRating`/`reviewCount` are always null/0; `readerCount` is derived live from
+ * cache miss (caching it for next time — RF-003, RF-004). `averageRating`/`reviewCount`
+ * reflect the real reviews of the book (RF-009); `readerCount` is derived live from
  * `reading_sessions`.
  */
 export const makeGetBook =
-  ({ bookRepository, openLibraryClient, readingSessionRepository }: GetBookDeps): GetBook =>
+  ({ bookRepository, openLibraryClient, readingSessionRepository, reviewRepository }: GetBookDeps): GetBook =>
   async ({ olid }) => {
     const book = await resolveBook({ bookRepository, openLibraryClient }, olid);
-    const readerCount = await readingSessionRepository.countDistinctFinishedReaders(book.id);
-    return toDTO(book, readerCount);
+    const [readerCount, reviewAggregates] = await Promise.all([
+      readingSessionRepository.countDistinctFinishedReaders(book.id),
+      reviewRepository.getAggregatesByBook(book.id),
+    ]);
+    return toDTO(book, reviewAggregates, readerCount);
   };
