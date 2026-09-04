@@ -18,3 +18,7 @@ export { OpenLibraryUnavailableError } from './open-library-unavailable-error';
 export { ReadingSessionNotFoundError } from './reading-session-not-found-error';
 export { InvalidReadingSessionStateError } from './invalid-reading-session-state-error';
 export { InvalidReadingSessionDatesError } from './invalid-reading-session-dates-error';
+export { CannotFollowSelfError } from './cannot-follow-self-error';
+export { AlreadyFollowingError } from './already-following-error';
+export { FollowRequestNotFoundError } from './follow-request-not-found-error';
+export { FollowNotFoundError } from './follow-not-found-error';

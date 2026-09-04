@@ -10,6 +10,7 @@ const publicUser: PublicUser = {
   email: 'a@b.com',
   handle: 'alice',
   displayName: 'Alice',
+  bio: null,
   createdAt: new Date(),
 };
 

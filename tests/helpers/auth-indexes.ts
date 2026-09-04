@@ -13,6 +13,12 @@ export async function ensureAuthIndexes(db: Db): Promise<void> {
   await db
     .collection('users')
     .createIndex({ handle: 1 }, { unique: true, name: 'users_handle_unique' });
+  await db
+    .collection('users')
+    .createIndex(
+      { displayName: 'text', handle: 'text' },
+      { name: 'users_displayName_handle_text' },
+    );
   await db.collection('auth_sessions').createIndex({ userId: 1 }, { name: 'auth_sessions_userId' });
   await db
     .collection('refresh_tokens')

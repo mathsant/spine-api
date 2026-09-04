@@ -5,6 +5,7 @@ export interface UserRecord {
   passwordHash: string;
   handle: string;
   displayName: string;
+  bio: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -15,6 +16,26 @@ export interface CreateUserInput {
   passwordHash: string;
   handle: string;
   displayName: string;
+}
+
+/** Fields the service supplies to edit a profile. Only the present keys are updated. */
+export interface UpdateProfileInput {
+  displayName?: string;
+  bio?: string | null;
+}
+
+/** Minimal user shape returned by `search` (P14 — no other profile data). */
+export interface UserSearchResult {
+  id: string;
+  handle: string;
+  displayName: string;
+}
+
+export interface UserSearchPage {
+  items: UserSearchResult[];
+  page: number;
+  limit: number;
+  totalItems: number;
 }
 
 /** Data-access port for the `users` collection. Only implementations touch the driver. */
@@ -31,4 +52,10 @@ export interface UserRepository {
 
   /** Sets a new password hash and `updatedAt`. */
   updatePasswordHash(id: string, passwordHash: string, now: Date): Promise<void>;
+
+  /** `$set` of only the keys present in `patch`, plus `updatedAt` (RF-002). */
+  updateProfile(id: string, patch: UpdateProfileInput, now: Date): Promise<UserRecord>;
+
+  /** `$text` search over `displayName`/`handle`, ranked by relevance, paginated by page (D2/D3). */
+  search(query: string, page: number, limit: number): Promise<UserSearchPage>;
 }

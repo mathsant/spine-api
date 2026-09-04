@@ -49,6 +49,7 @@ describe('authenticate service (integration)', () => {
       email: 'alice@example.com',
       handle: 'alice',
       displayName: 'Alice',
+      bio: null,
       createdAt: expect.any(Date),
     });
     expect(user).not.toHaveProperty('passwordHash');

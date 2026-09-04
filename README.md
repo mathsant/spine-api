@@ -17,7 +17,8 @@ non-negotiable principles.
 ## Requirements
 
 - Node.js **24** (`nvm use` reads `.nvmrc`)
-- Docker + Docker Compose (for a local MongoDB)
+- A MongoDB Atlas cluster (connection string via `MONGO_URI`) — or, optionally,
+  Docker + Docker Compose to run MongoDB locally instead (legacy path)
 
 ## Setup
 
@@ -34,7 +35,7 @@ Environment variables (validated on boot — a missing/invalid one aborts startu
 | `NODE_ENV`      | no       | `development` | `development` \| `test` \| `production`    |
 | `PORT`          | no       | `3000`        | HTTP port                                  |
 | `HOST`          | no       | `0.0.0.0`     | bind interface                             |
-| `MONGO_URI`     | **yes**  | —             | `mongodb://…` or `mongodb+srv://…`         |
+| `MONGO_URI`     | **yes**  | —             | Atlas `mongodb+srv://…` (or local `mongodb://…`) |
 | `MONGO_DB_NAME` | **yes**  | —             | database name                              |
 | `LOG_LEVEL`     | no       | `info`        | pino level                                 |
 | `ACCESS_TOKEN_SECRET`        | **yes** | —        | HS256 signing secret, ≥ 32 chars           |
@@ -42,25 +43,23 @@ Environment variables (validated on boot — a missing/invalid one aborts startu
 | `AUTH_RATE_LIMIT_WINDOW_MS`  | no      | `900000` | rate-limit window in ms (15 min)           |
 | `OPEN_LIBRARY_BASE_URL`      | no      | `https://openlibrary.org` | book search/lookup base URL   |
 | `OPEN_LIBRARY_TIMEOUT_MS`    | no      | `5000`   | Open Library request timeout in ms         |
-| `MONGO_PORT`    | no       | `27017`       | `docker-compose` only, not read by the app |
+| `MONGO_PORT`    | no       | `27017`       | `docker-compose` only (legacy local MongoDB), not read by the app |
 
 ## Run
 
 ```bash
-docker compose up -d          # local MongoDB (healthcheck: docker compose ps)
 pnpm dev                    # tsx watch, structured logs with reqId
 ```
+
+`MONGO_URI` in `.env` points at your Atlas cluster, so there's no local
+container to start. (Legacy path: `docker compose up -d` still works if you'd
+rather point `MONGO_URI` at a local `mongodb://localhost:27017` instead.)
 
 Check it:
 
 ```bash
 curl -i localhost:3000/health
 # 200 {"status":"ok","db":"up","uptime":<n>}
-
-docker compose stop mongo
-curl -i localhost:3000/health
-# 503 {"status":"degraded","db":"down","uptime":<n>}   (process stays up)
-docker compose start mongo
 ```
 
 `GET /health` echoes an incoming `x-request-id` header back on the response and
@@ -92,7 +91,7 @@ rotates on every use (replaying a rotated token revokes the whole session). Run
 | `POST /v1/auth/refresh`       | `refreshToken`                                         | `200` new token pair | `400`, `401` `INVALID_REFRESH_TOKEN` / `REFRESH_TOKEN_EXPIRED` / `REFRESH_TOKEN_REUSE_DETECTED` |
 | `POST /v1/auth/logout`        | `refreshToken`                                         | `204` (idempotent) | `400` |
 | `POST /v1/auth/change-password` | `currentPassword`, `newPassword` (8–72), `refreshToken?` — **Bearer** | `204`; revokes the other sessions | `400`, `401` `UNAUTHENTICATED` / `INVALID_ACCESS_TOKEN` / `INVALID_CREDENTIALS` |
-| `GET /v1/me`                  | — **Bearer**                                           | `200` `{ id, email, handle, displayName, createdAt }` | `401` `UNAUTHENTICATED` / `INVALID_ACCESS_TOKEN` |
+| `GET /v1/me`                  | — **Bearer**                                           | `200` `{ id, email, handle, displayName, bio, createdAt }` | `401` `UNAUTHENTICATED` / `INVALID_ACCESS_TOKEN` |
 
 Every error uses the shared envelope `{ "error": { "code", "message", "statusCode", "details?" } }`.
 
@@ -128,6 +127,36 @@ user returns `404 READING_SESSION_NOT_FOUND`, the same as a nonexistent one.
 | `PATCH /v1/reading-sessions/:sessionId`         | `startedAt?`, `finishedAt?`, `currentPage?` (≥1) | `200` updated session | `400`, `401`, `404`, `422` `INVALID_READING_SESSION_DATES` |
 | `DELETE /v1/reading-sessions/:sessionId`        | —                                           | `204` | `401`, `404` |
 | `GET /v1/me/reading-sessions`                   | `bookId?`, `cursor?`, `limit?`             | `200` `{ items, nextCursor }` | `401` |
+
+## Profile & Follow
+
+All endpoints are under `/v1` and require `Authorization: Bearer <accessToken>`. `GET /v1/me`
+(above) now also returns `bio`; editing the profile is a separate endpoint below. `handle` is
+immutable — no endpoint in this feature accepts it. User search is a MongoDB text index over
+`displayName`/`handle` (whole-word matches, not substrings), paginated **by page** like book
+search — not by cursor, since relevance ranking has no stable cursor key. The follow graph is
+two collections, `follow_requests` (pending only — a request is deleted, not marked, once
+resolved) and `follows` (approved only); at most one pending request and one approved relation
+per ordered pair. Approving a request never creates the reverse relation. Acting on a pending
+request or an approved relation that isn't yours (or doesn't exist) returns `404` — never
+`403`, so a client can't tell the two cases apart. The followers/following/pending-requests
+lists only ever show the caller's own data; there is no endpoint to view another user's. Run
+`pnpm migrate:up` once to create the `follow_requests`/`follows` collections and the text index
+on `users`.
+
+| Method & path                                | Body / query                     | Success | Errors |
+| --------------------------------------------- | ---------------------------------- | ------- | ------ |
+| `PATCH /v1/me`                                | `displayName?` (1–50), `bio?` (≤280, nullable) — at least one | `200` `{ id, handle, displayName, bio }` | `400`, `401` |
+| `GET /v1/users/search`                        | `q` (≥2), `page?`, `limit?`        | `200` `{ items: [{ id, handle, displayName, avatarUrl }], page, limit, totalItems }` | `400`, `401` |
+| `POST /v1/users/:userId/follow-request`       | —                                   | `201` new pending request / `200` already pending | `401`, `404`, `409` `ALREADY_FOLLOWING`, `422` `CANNOT_FOLLOW_SELF` |
+| `DELETE /v1/users/:userId/follow-request`     | —                                   | `204` cancels my pending request | `401`, `404` `FOLLOW_REQUEST_NOT_FOUND` |
+| `POST /v1/users/:userId/follow-request/approve` | —                                 | `204` creates `:userId` → me, no reciprocity | `401`, `404` |
+| `POST /v1/users/:userId/follow-request/reject`  | —                                 | `204` deletes the request | `401`, `404` |
+| `DELETE /v1/users/:userId/follow`             | —                                   | `204` I stop following `:userId` | `401`, `404` `FOLLOW_NOT_FOUND` |
+| `DELETE /v1/users/:userId/follower`           | —                                   | `204` removes `:userId` as my follower | `401`, `404` |
+| `GET /v1/me/follow-requests`                  | `direction?` (`incoming`\|`outgoing`, default `incoming`), `cursor?`, `limit?` | `200` `{ items, nextCursor }` | `400`, `401` |
+| `GET /v1/me/followers`                        | `cursor?`, `limit?`                | `200` `{ items, nextCursor }` | `400`, `401` |
+| `GET /v1/me/following`                        | `cursor?`, `limit?`                | `200` `{ items, nextCursor }` | `400`, `401` |
 
 ## Tests
 

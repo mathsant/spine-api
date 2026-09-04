@@ -1,0 +1,294 @@
+openapi: 3.1.0
+info:
+  title: better-books — profile & follow
+  version: 0.1.0
+  description: >
+    Contrato dos endpoints de edição de perfil, busca de usuário e grafo de follow
+    entregues pela feature 004-profilefollow. Referência: spec RF-001..RF-021. Todos sob
+    o prefixo /v1 e exigem `Authorization: Bearer <accessToken>` (RF-021 — nenhuma operação
+    é anônima). `GET /v1/me` já existe desde a 002 e só ganha o campo `bio` (não repetido
+    aqui — ver `research.md` D1).
+
+servers:
+  - url: /v1
+
+security:
+  - bearerAuth: []
+
+paths:
+  /me:
+    patch:
+      operationId: editProfile
+      summary: Edita displayName e/ou bio do próprio perfil (RF-002). Handle não é aceito (RF-003).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditProfileRequest" }
+      responses:
+        "200": { description: Perfil atualizado., content: { application/json: { schema: { $ref: "#/components/schemas/Profile" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /users/search:
+    get:
+      operationId: searchUsers
+      summary: Busca usuários por @handle/displayName (RF-004, P14 — retorno mínimo).
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 100 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        "200": { description: Página de resultados., content: { application/json: { schema: { $ref: "#/components/schemas/UserSearchPage" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /users/{userId}/follow-request:
+    post:
+      operationId: sendFollowRequest
+      summary: >
+        Envia pedido de follow para :userId (RF-005). Idempotente se já pendente
+        (RF-008 — 200 em vez de 201). Erro se for eu mesmo (RF-006) ou se eu já seguir
+        :userId (RF-007).
+      parameters:
+        - { $ref: "#/components/parameters/UserId" }
+      responses:
+        "201": { description: Pedido novo criado., content: { application/json: { schema: { $ref: "#/components/schemas/FollowRequestResource" } } } }
+        "200": { description: Já havia um pedido pendente meu para :userId., content: { application/json: { schema: { $ref: "#/components/schemas/FollowRequestResource" } } } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: ":userId não existe.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "409": { $ref: "#/components/responses/AlreadyFollowing" }
+        "422": { $ref: "#/components/responses/CannotFollowSelf" }
+    delete:
+      operationId: cancelFollowRequest
+      summary: Cancela meu pedido pendente para :userId (RF-009).
+      parameters:
+        - { $ref: "#/components/parameters/UserId" }
+      responses:
+        "204": { description: Cancelado. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/FollowRequestNotFound" }
+
+  /users/{userId}/follow-request/approve:
+    post:
+      operationId: approveFollowRequest
+      summary: Aprova o pedido pendente de :userId para mim (RF-010). Não cria a relação inversa (RF-011).
+      parameters:
+        - { $ref: "#/components/parameters/UserId" }
+      responses:
+        "204": { description: Aprovado — relação :userId → eu criada. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/FollowRequestNotFound" }
+
+  /users/{userId}/follow-request/reject:
+    post:
+      operationId: rejectFollowRequest
+      summary: Recusa o pedido pendente de :userId para mim (RF-012). Pedido é apagado (RF-013).
+      parameters:
+        - { $ref: "#/components/parameters/UserId" }
+      responses:
+        "204": { description: Recusado — pedido apagado. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/FollowRequestNotFound" }
+
+  /users/{userId}/follow:
+    delete:
+      operationId: unfollowUser
+      summary: Deixo de seguir :userId (RF-014).
+      parameters:
+        - { $ref: "#/components/parameters/UserId" }
+      responses:
+        "204": { description: Deixei de seguir. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/FollowNotFound" }
+
+  /users/{userId}/follower:
+    delete:
+      operationId: removeFollower
+      summary: Removo :userId como meu seguidor (RF-015).
+      parameters:
+        - { $ref: "#/components/parameters/UserId" }
+      responses:
+        "204": { description: Removido. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/FollowNotFound" }
+
+  /me/follow-requests:
+    get:
+      operationId: listFollowRequests
+      summary: Lista meus pedidos de follow pendentes, recebidos ou enviados (cenário 4; D6 do research.md).
+      parameters:
+        - { name: direction, in: query, schema: { type: string, enum: [incoming, outgoing], default: incoming } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/InternalLimit" }
+      responses:
+        "200": { description: Página de pedidos pendentes., content: { application/json: { schema: { $ref: "#/components/schemas/FollowRequestCursorPage" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /me/followers:
+    get:
+      operationId: listFollowers
+      summary: Lista meus seguidores aprovados (RF-018). Visível só para mim (RF-020).
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/InternalLimit" }
+      responses:
+        "200": { description: Página de seguidores., content: { application/json: { schema: { $ref: "#/components/schemas/FollowCursorPage" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /me/following:
+    get:
+      operationId: listFollowing
+      summary: Lista quem eu sigo, aprovados (RF-019). Visível só para mim (RF-020).
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/InternalLimit" }
+      responses:
+        "200": { description: Página de quem eu sigo., content: { application/json: { schema: { $ref: "#/components/schemas/FollowCursorPage" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: opaque-app-jwt }
+
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+    InternalLimit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            statusCode: { type: integer }
+            details: {}
+          required: [code, message, statusCode]
+      required: [error]
+
+    EditProfileRequest:
+      type: object
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 50 }
+        bio: { type: [string, "null"], maxLength: 280 }
+      additionalProperties: false
+      minProperties: 1
+
+    Profile:
+      type: object
+      properties:
+        id: { type: string }
+        handle: { type: string }
+        displayName: { type: string }
+        bio: { type: [string, "null"] }
+      required: [id, handle, displayName, bio]
+
+    UserSearchResult:
+      type: object
+      properties:
+        id: { type: string }
+        handle: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: [string, "null"] }
+      required: [id, handle, displayName, avatarUrl]
+
+    UserSearchPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/UserSearchResult" } }
+        page: { type: integer }
+        limit: { type: integer }
+        totalItems: { type: integer }
+      required: [items, page, limit, totalItems]
+
+    FollowRequestResource:
+      type: object
+      properties:
+        requesterId: { type: string }
+        targetId: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [requesterId, targetId, createdAt]
+
+    FollowRequestItem:
+      type: object
+      properties:
+        userId: { type: string, description: "o outro lado do pedido (quem pediu, se incoming; quem recebeu, se outgoing)" }
+        handle: { type: string }
+        displayName: { type: string }
+        direction: { type: string, enum: [incoming, outgoing] }
+        createdAt: { type: string, format: date-time }
+      required: [userId, handle, displayName, direction, createdAt]
+
+    FollowRequestCursorPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/FollowRequestItem" } }
+        nextCursor: { type: [string, "null"] }
+      required: [items, nextCursor]
+
+    FollowedUser:
+      type: object
+      properties:
+        userId: { type: string }
+        handle: { type: string }
+        displayName: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [userId, handle, displayName, createdAt]
+
+    FollowCursorPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/FollowedUser" } }
+        nextCursor: { type: [string, "null"] }
+      required: [items, nextCursor]
+
+  responses:
+    ValidationError:
+      description: Corpo/query reprovado pelo schema zod.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthenticated:
+      description: Sem access token válido.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    CannotFollowSelf:
+      description: Pedido de follow para o próprio usuário.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    AlreadyFollowing:
+      description: Já existe follow aprovado do remetente para o alvo.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    FollowRequestNotFound:
+      description: Nenhum pedido pendente para o par esperado.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    FollowNotFound:
+      description: Nenhuma relação de follow aprovada para o par esperado.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }

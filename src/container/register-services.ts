@@ -8,6 +8,19 @@ import {
   makeUnmarkWantToRead,
 } from '../services/books';
 import { makeGetHealth } from '../services/health';
+import { makeEditProfile } from '../services/profile';
+import { makeSearchUsers } from '../services/users';
+import {
+  makeApproveFollowRequest,
+  makeCancelFollowRequest,
+  makeListFollowers,
+  makeListFollowing,
+  makeListFollowRequests,
+  makeRejectFollowRequest,
+  makeRemoveFollower,
+  makeSendFollowRequest,
+  makeUnfollow,
+} from '../services/follows';
 import {
   makeAuthenticate,
   makeChangePassword,
@@ -61,6 +74,57 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
         userRepository: cradle.userRepository,
         authSessionRepository: cradle.authSessionRepository,
         clock: cradle.clock,
+      }),
+    ).singleton(),
+    editProfileService: asFunction((cradle: AppCradle) =>
+      makeEditProfile({ userRepository: cradle.userRepository, clock: cradle.clock }),
+    ).singleton(),
+    searchUsersService: asFunction((cradle: AppCradle) =>
+      makeSearchUsers({ userRepository: cradle.userRepository }),
+    ).singleton(),
+    sendFollowRequestService: asFunction((cradle: AppCradle) =>
+      makeSendFollowRequest({
+        userRepository: cradle.userRepository,
+        followRepository: cradle.followRepository,
+        followRequestRepository: cradle.followRequestRepository,
+        clock: cradle.clock,
+      }),
+    ).singleton(),
+    cancelFollowRequestService: asFunction((cradle: AppCradle) =>
+      makeCancelFollowRequest({ followRequestRepository: cradle.followRequestRepository }),
+    ).singleton(),
+    approveFollowRequestService: asFunction((cradle: AppCradle) =>
+      makeApproveFollowRequest({
+        followRequestRepository: cradle.followRequestRepository,
+        followRepository: cradle.followRepository,
+        clock: cradle.clock,
+      }),
+    ).singleton(),
+    rejectFollowRequestService: asFunction((cradle: AppCradle) =>
+      makeRejectFollowRequest({ followRequestRepository: cradle.followRequestRepository }),
+    ).singleton(),
+    unfollowService: asFunction((cradle: AppCradle) =>
+      makeUnfollow({ followRepository: cradle.followRepository }),
+    ).singleton(),
+    removeFollowerService: asFunction((cradle: AppCradle) =>
+      makeRemoveFollower({ followRepository: cradle.followRepository }),
+    ).singleton(),
+    listFollowRequestsService: asFunction((cradle: AppCradle) =>
+      makeListFollowRequests({
+        followRequestRepository: cradle.followRequestRepository,
+        userRepository: cradle.userRepository,
+      }),
+    ).singleton(),
+    listFollowersService: asFunction((cradle: AppCradle) =>
+      makeListFollowers({
+        followRepository: cradle.followRepository,
+        userRepository: cradle.userRepository,
+      }),
+    ).singleton(),
+    listFollowingService: asFunction((cradle: AppCradle) =>
+      makeListFollowing({
+        followRepository: cradle.followRepository,
+        userRepository: cradle.userRepository,
       }),
     ).singleton(),
     searchBooksService: asFunction((cradle: AppCradle) =>

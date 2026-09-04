@@ -44,6 +44,7 @@ describe('signup service (integration)', () => {
       email: 'alice@example.com',
       handle: 'alice',
       displayName: 'Alice',
+      bio: null,
       createdAt: expect.any(Date),
     });
     expect(user).not.toHaveProperty('passwordHash');
@@ -73,6 +74,10 @@ describe('signup service (integration)', () => {
       findByHandle: async () => null,
       findById: async () => null,
       updatePasswordHash: async () => undefined,
+      updateProfile: async () => {
+        throw new Error('not used in this test');
+      },
+      search: async () => ({ items: [], page: 1, limit: 20, totalItems: 0 }),
       create: async () => {
         throw new HandleAlreadyInUseError();
       },

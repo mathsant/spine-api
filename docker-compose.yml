@@ -1,3 +1,6 @@
+# Legacy/optional: local MongoDB for dev without Atlas. The app connects via
+# MONGO_URI (see .env.example) — this container is not required for `pnpm dev`
+# when MONGO_URI points at an Atlas cluster.
 services:
   mongo:
     image: mongo:7
