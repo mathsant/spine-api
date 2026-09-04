@@ -27,6 +27,8 @@ export const envSchema = z
       .min(32, 'must be at least 32 characters (HS256 signing secret)'),
     AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10),
     AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(900_000),
+    OPEN_LIBRARY_BASE_URL: z.string().url().default('https://openlibrary.org'),
+    OPEN_LIBRARY_TIMEOUT_MS: z.coerce.number().int().min(100).default(5000),
   })
   .transform((raw) => ({
     nodeEnv: raw.NODE_ENV,
@@ -38,6 +40,8 @@ export const envSchema = z
     accessTokenSecret: raw.ACCESS_TOKEN_SECRET,
     authRateLimitMax: raw.AUTH_RATE_LIMIT_MAX,
     authRateLimitWindowMs: raw.AUTH_RATE_LIMIT_WINDOW_MS,
+    openLibraryBaseUrl: raw.OPEN_LIBRARY_BASE_URL,
+    openLibraryTimeoutMs: raw.OPEN_LIBRARY_TIMEOUT_MS,
   }));
 
 export type AppConfig = z.infer<typeof envSchema>;

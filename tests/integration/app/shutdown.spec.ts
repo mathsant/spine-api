@@ -27,6 +27,8 @@ describe('application shutdown (integration)', () => {
       accessTokenSecret: 'test-access-token-secret-0123456789abcdef',
       authRateLimitMax: 10,
       authRateLimitWindowMs: 900_000,
+      openLibraryBaseUrl: 'https://openlibrary.org',
+      openLibraryTimeoutMs: 5000,
     };
 
     const app = await buildApp(config);

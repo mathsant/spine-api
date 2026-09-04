@@ -1,0 +1,352 @@
+### auth.http — feature 002-authregistration (extensão VS Code: humao.rest-client)
+#
+# Clique em "Send Request" acima de cada requisição, de cima para baixo.
+# Os blocos "# @name x" nomeiam a resposta; as linhas "@var = {{x.response.body.$.campo}}"
+# encadeiam os tokens automaticamente.
+#
+# Pré-requisito: docker compose up -d  &&  pnpm migrate:up  &&  pnpm dev
+# Para repetir do zero: docker compose down -v && docker compose up -d && pnpm migrate:up
+
+@base = http://localhost:3000
+@contentType = application/json
+
+### saúde
+GET {{base}}/health
+
+
+###############################################################################
+# Fase 1 — Cadastro · POST /v1/auth/signup   (rate-limited por IP; não retorna tokens)
+###############################################################################
+
+### 1.1 — 201 Created (representação pública, sem passwordHash/token)
+# @name signup
+POST {{base}}/v1/auth/signup
+Content-Type: {{contentType}}
+
+{
+  "email": "alice@example.com",
+  "password": "correct horse battery",
+  "handle": "alice",
+  "displayName": "Alice"
+}
+
+### 1.2 — 409 EMAIL_ALREADY_IN_USE (mesmo e-mail, qualquer caixa)
+POST {{base}}/v1/auth/signup
+Content-Type: {{contentType}}
+
+{
+  "email": "ALICE@example.com",
+  "password": "another one!!",
+  "handle": "other",
+  "displayName": "Other"
+}
+
+### 1.3 — 409 HANDLE_ALREADY_IN_USE (handle "Alice" colide com "alice" — D9)
+POST {{base}}/v1/auth/signup
+Content-Type: {{contentType}}
+
+{
+  "email": "bob@example.com",
+  "password": "another one!!",
+  "handle": "Alice",
+  "displayName": "Bob"
+}
+
+### 1.4 — 400 VALIDATION_ERROR (senha curta, handle inválido, displayName vazio)
+POST {{base}}/v1/auth/signup
+Content-Type: {{contentType}}
+
+{
+  "email": "x@y.z",
+  "password": "short",
+  "handle": "!!",
+  "displayName": "   "
+}
+
+### 1.5 — segundo usuário (bob) para as fases seguintes
+POST {{base}}/v1/auth/signup
+Content-Type: {{contentType}}
+
+{
+  "email": "bob@example.com",
+  "password": "bob strong pass",
+  "handle": "bob",
+  "displayName": "Bob"
+}
+
+
+###############################################################################
+# Fase 2 — Login · POST /v1/auth/login   (rate-limited por IP + e-mail; identifica por e-mail)
+###############################################################################
+
+### 2.1 — 200 OK (captura accessToken/refreshToken)
+# @name login
+POST {{base}}/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "alice@example.com",
+  "password": "correct horse battery"
+}
+
+@accessToken = {{login.response.body.$.accessToken}}
+@refreshToken = {{login.response.body.$.refreshToken}}
+
+### 2.2 — 401 INVALID_CREDENTIALS (senha errada)
+POST {{base}}/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "alice@example.com",
+  "password": "nope"
+}
+
+### 2.3 — 401 INVALID_CREDENTIALS (e-mail inexistente — corpo IDÊNTICO ao 2.2)
+POST {{base}}/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "ghost@example.com",
+  "password": "nope"
+}
+
+
+###############################################################################
+# Fase 3 — Identidade · GET /v1/me   (protegida)
+###############################################################################
+
+### 3.1 — 200 OK (dono do access token)
+GET {{base}}/v1/me
+Authorization: Bearer {{accessToken}}
+
+### 3.2 — 401 UNAUTHENTICATED (sem header)
+GET {{base}}/v1/me
+
+### 3.3 — 401 UNAUTHENTICATED (esquema não-Bearer)
+GET {{base}}/v1/me
+Authorization: Basic abc
+
+### 3.4 — 401 INVALID_ACCESS_TOKEN (token malformado)
+GET {{base}}/v1/me
+Authorization: Bearer not.a.jwt
+
+
+###############################################################################
+# Fase 4 — Refresh + rotação · POST /v1/auth/refresh
+###############################################################################
+
+### 4.1 — 200 OK: novo par; o refresh anterior é invalidado
+# @name refresh
+POST {{base}}/v1/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+@newRefreshToken = {{refresh.response.body.$.refreshToken}}
+
+### 4.2 — 401 REFRESH_TOKEN_REUSE_DETECTED (reapresenta o refresh antigo → revoga a sessão)
+POST {{base}}/v1/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### 4.3 — 401 INVALID_REFRESH_TOKEN (o refresh "novo" também caiu com a sessão)
+POST {{base}}/v1/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{newRefreshToken}}"
+}
+
+### 4.4 — 401 INVALID_REFRESH_TOKEN (token forjado)
+POST {{base}}/v1/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "deadbeef"
+}
+
+# REFRESH_TOKEN_EXPIRED (sessão inativa > 30 dias) não dá para exercitar aqui —
+# coberto por teste de integração.
+
+
+###############################################################################
+# Fase 5 — Logout · POST /v1/auth/logout   (idempotente)
+###############################################################################
+
+### 5.0 — sessão nova só para esta fase
+# @name loginLogout
+POST {{base}}/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "alice@example.com",
+  "password": "correct horse battery"
+}
+
+@logoutAccess = {{loginLogout.response.body.$.accessToken}}
+@logoutRefresh = {{loginLogout.response.body.$.refreshToken}}
+
+### 5.1 — 204 No Content
+POST {{base}}/v1/auth/logout
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{logoutRefresh}}"
+}
+
+### 5.2 — refresh depois do logout → 401 INVALID_REFRESH_TOKEN
+POST {{base}}/v1/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{logoutRefresh}}"
+}
+
+### 5.3 — 204 de novo (idempotente)
+POST {{base}}/v1/auth/logout
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{logoutRefresh}}"
+}
+
+### 5.4 — 204 para token desconhecido
+POST {{base}}/v1/auth/logout
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "whatever"
+}
+
+### 5.5 — o access token de antes do logout ainda vale até expirar (aceito por design)
+GET {{base}}/v1/me
+Authorization: Bearer {{logoutAccess}}
+
+
+###############################################################################
+# Fase 6 — Troca de senha · POST /v1/auth/change-password   (protegida)
+# Revoga todas as OUTRAS sessões; preserva a atual se o refreshToken dela for enviado.
+###############################################################################
+
+### 6.0a — sessão A
+# @name loginA
+POST {{base}}/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "alice@example.com",
+  "password": "correct horse battery"
+}
+
+@aAccess = {{loginA.response.body.$.accessToken}}
+@aRefresh = {{loginA.response.body.$.refreshToken}}
+
+### 6.0b — sessão B
+# @name loginB
+POST {{base}}/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "alice@example.com",
+  "password": "correct horse battery"
+}
+
+@bRefresh = {{loginB.response.body.$.refreshToken}}
+
+### 6.1 — 401 INVALID_CREDENTIALS (senha atual errada; nada muda)
+POST {{base}}/v1/auth/change-password
+Authorization: Bearer {{aAccess}}
+Content-Type: {{contentType}}
+
+{
+  "currentPassword": "wrong",
+  "newPassword": "a brand new pass"
+}
+
+### 6.2 — 400 VALIDATION_ERROR (nova senha fora da política)
+POST {{base}}/v1/auth/change-password
+Authorization: Bearer {{aAccess}}
+Content-Type: {{contentType}}
+
+{
+  "currentPassword": "correct horse battery",
+  "newPassword": "short"
+}
+
+### 6.3 — 204: troca ok pela sessão A, preservando A
+POST {{base}}/v1/auth/change-password
+Authorization: Bearer {{aAccess}}
+Content-Type: {{contentType}}
+
+{
+  "currentPassword": "correct horse battery",
+  "newPassword": "a brand new pass",
+  "refreshToken": "{{aRefresh}}"
+}
+
+### 6.4 — sessão B foi revogada → 401
+POST {{base}}/v1/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{bRefresh}}"
+}
+
+### 6.5 — sessão A preservada → 200
+POST {{base}}/v1/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{aRefresh}}"
+}
+
+### 6.6a — login com a senha NOVA → 200
+POST {{base}}/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "alice@example.com",
+  "password": "a brand new pass"
+}
+
+### 6.6b — login com a senha ANTIGA → 401
+POST {{base}}/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "alice@example.com",
+  "password": "correct horse battery"
+}
+
+
+###############################################################################
+# Fase 7 — Rate limit · 429 TOO_MANY_REQUESTS
+# AUTH_RATE_LIMIT_MAX (default 10) por AUTH_RATE_LIMIT_WINDOW_MS (default 15 min).
+# Para ver rápido: pnpm dev com AUTH_RATE_LIMIT_MAX=3 AUTH_RATE_LIMIT_WINDOW_MS=10000
+# Clique em "Send Request" várias vezes seguidas: as primeiras dão 401, depois 429.
+###############################################################################
+
+### 7.1 — login repetido (clique N vezes)
+POST {{base}}/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "bob@example.com",
+  "password": "nope"
+}
+
+### 7.2 — signup repetido (clique N vezes; rate-limited por IP)
+POST {{base}}/v1/auth/signup
+Content-Type: {{contentType}}
+
+{
+  "email": "rl@example.com",
+  "password": "some strong pass",
+  "handle": "rluser",
+  "displayName": "RL"
+}

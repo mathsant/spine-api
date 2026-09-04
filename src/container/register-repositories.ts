@@ -1,7 +1,10 @@
 import { asFunction, type AwilixContainer } from 'awilix';
 
 import { MongoAuthSessionRepository } from '../repositories/auth-sessions';
+import { MongoBookRepository } from '../repositories/books';
 import { MongoHealthRepository } from '../repositories/health';
+import { MongoReadingSessionRepository } from '../repositories/reading-sessions';
+import { MongoShelfMembershipRepository } from '../repositories/shelf-memberships';
 import { MongoUserRepository } from '../repositories/users';
 import type { AppCradle } from './cradle';
 
@@ -15,6 +18,15 @@ export function registerRepositories(container: AwilixContainer<AppCradle>): voi
     ).singleton(),
     authSessionRepository: asFunction(
       (cradle: AppCradle) => new MongoAuthSessionRepository(cradle.db),
+    ).singleton(),
+    bookRepository: asFunction(
+      (cradle: AppCradle) => new MongoBookRepository(cradle.db),
+    ).singleton(),
+    shelfMembershipRepository: asFunction(
+      (cradle: AppCradle) => new MongoShelfMembershipRepository(cradle.db),
+    ).singleton(),
+    readingSessionRepository: asFunction(
+      (cradle: AppCradle) => new MongoReadingSessionRepository(cradle.db),
     ).singleton(),
   });
 }

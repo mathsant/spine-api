@@ -1,0 +1,8 @@
+export { booksRoutes } from './books.routes';
+export { searchBooksController } from './search-books.controller';
+export { getBookController } from './get-book.controller';
+export { markWantToReadController } from './mark-want-to-read.controller';
+export { unmarkWantToReadController } from './unmark-want-to-read.controller';
+export { startReadingController } from './start-reading.controller';
+export { markFinishedController } from './mark-finished.controller';
+export { listWantToReadController } from './list-want-to-read.controller';

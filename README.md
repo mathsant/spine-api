@@ -40,6 +40,8 @@ Environment variables (validated on boot — a missing/invalid one aborts startu
 | `ACCESS_TOKEN_SECRET`        | **yes** | —        | HS256 signing secret, ≥ 32 chars           |
 | `AUTH_RATE_LIMIT_MAX`        | no      | `10`     | max `login`/`signup` requests per window   |
 | `AUTH_RATE_LIMIT_WINDOW_MS`  | no      | `900000` | rate-limit window in ms (15 min)           |
+| `OPEN_LIBRARY_BASE_URL`      | no      | `https://openlibrary.org` | book search/lookup base URL   |
+| `OPEN_LIBRARY_TIMEOUT_MS`    | no      | `5000`   | Open Library request timeout in ms         |
 | `MONGO_PORT`    | no       | `27017`       | `docker-compose` only, not read by the app |
 
 ## Run
@@ -93,6 +95,39 @@ rotates on every use (replaying a rotated token revokes the whole session). Run
 | `GET /v1/me`                  | — **Bearer**                                           | `200` `{ id, email, handle, displayName, createdAt }` | `401` `UNAUTHENTICATED` / `INVALID_ACCESS_TOKEN` |
 
 Every error uses the shared envelope `{ "error": { "code", "message", "statusCode", "details?" } }`.
+
+## Books
+
+All endpoints are under `/v1` and require `Authorization: Bearer <accessToken>` — every
+route here operates only on the caller's own data (viewing another user's shelf/history
+depends on the Follow feature, not built yet). A book is identified by its Open Library
+work key (`olid`, e.g. `OL12345W`) and is cached locally (`books` collection) the first
+time it's looked up or acted on — search results themselves are not cached, only a
+`GET /v1/books/:olid` or a status change is. Run `pnpm migrate:up` once to create the
+`books`, `shelf_memberships` and `reading_sessions` collections.
+
+A reading session's `status` is `reading` or `finished`; a user has at most one open
+(`reading`) session per book at a time — calling `start-reading` again reuses it (`200`)
+instead of creating a duplicate (`201`). Rereading a finished book creates a brand new,
+independent session. Progress is a single `currentPage` on the session (no history of
+points in time, and no validation against the book's total page count). Editing or
+deleting a session — or updating its progress or finishing it — that belongs to another
+user returns `404 READING_SESSION_NOT_FOUND`, the same as a nonexistent one.
+
+| Method & path                                | Body / query                              | Success | Errors |
+| --------------------------------------------- | ------------------------------------------ | ------- | ------ |
+| `GET /v1/books/search`                        | `q`, `page?`, `limit?`                     | `200` `{ items, page, limit, totalItems }` | `400`, `401`, `503` `OPEN_LIBRARY_UNAVAILABLE` |
+| `GET /v1/books/:olid`                         | —                                           | `200` book + `aggregates` (cache-on-read) | `401`, `404` `BOOK_NOT_FOUND`, `503` |
+| `PUT /v1/books/:olid/want-to-read`            | —                                           | `204` (idempotent) | `401`, `404`, `503` |
+| `DELETE /v1/books/:olid/want-to-read`         | —                                           | `204` (idempotent, never calls Open Library) | `401` |
+| `POST /v1/books/:olid/start-reading`          | —                                           | `201` new session / `200` reused open one | `401`, `404`, `503` |
+| `POST /v1/books/:olid/mark-finished`          | `startedAt?`, `finishedAt`                 | `201` new `finished` session | `400`, `401`, `404`, `503` |
+| `GET /v1/me/want-to-read`                     | `cursor?`, `limit?`                        | `200` `{ items, nextCursor }` | `401` |
+| `POST /v1/reading-sessions/:sessionId/progress` | `currentPage`                             | `200` updated session | `400`, `401`, `404`, `409` `INVALID_READING_SESSION_STATE` |
+| `POST /v1/reading-sessions/:sessionId/finish`   | `finishedAt?` (defaults to now)           | `200` (idempotent) | `400`, `401`, `404` |
+| `PATCH /v1/reading-sessions/:sessionId`         | `startedAt?`, `finishedAt?`, `currentPage?` (≥1) | `200` updated session | `400`, `401`, `404`, `422` `INVALID_READING_SESSION_DATES` |
+| `DELETE /v1/reading-sessions/:sessionId`        | —                                           | `204` | `401`, `404` |
+| `GET /v1/me/reading-sessions`                   | `bookId?`, `cursor?`, `limit?`             | `200` `{ items, nextCursor }` | `401` |
 
 ## Tests
 

@@ -1,0 +1,22 @@
+/** Persisted shape of a want-to-read mark, with the Mongo `_id` surfaced as `id`. */
+export interface ShelfMembershipRecord {
+  id: string;
+  userId: string;
+  bookId: string;
+  createdAt: Date;
+}
+
+export interface CursorPage<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
+/** Data-access port for the `shelf_memberships` collection. */
+export interface ShelfMembershipRepository {
+  /** Upsert — marking the same pair twice is a no-op (RF-005, D6). */
+  add(userId: string, bookId: string): Promise<void>;
+  /** Removing a pair that doesn't exist is not an error (RF-006). */
+  remove(userId: string, bookId: string): Promise<void>;
+  /** Cursor page ordered by `createdAt` desc. */
+  list(userId: string, cursor: string | null, limit: number): Promise<CursorPage<ShelfMembershipRecord>>;
+}
