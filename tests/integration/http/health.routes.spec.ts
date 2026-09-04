@@ -11,6 +11,9 @@ const baseConfig = (overrides: Partial<AppConfig>): AppConfig => ({
   mongoUri: 'mongodb://127.0.0.1:59999/?serverSelectionTimeoutMS=500',
   mongoDbName: 'health_test',
   logLevel: 'silent',
+  accessTokenSecret: 'test-access-token-secret-0123456789abcdef',
+  authRateLimitMax: 10,
+  authRateLimitWindowMs: 900_000,
   ...overrides,
 });
 

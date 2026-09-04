@@ -15,3 +15,6 @@ yarn-error.log*
 .vscode/*
 # JetBrains IDE
 /.idea
+
+# local API request collections (nao versionar)
+/curls/

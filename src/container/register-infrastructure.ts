@@ -15,6 +15,7 @@ export function registerInfrastructure(
 ): void {
   container.register({
     config: asValue(config),
+    clock: asValue({ now: () => new Date() }),
     mongoClient: asFunction((cradle: AppCradle) => createMongoClient(cradle.config))
       .singleton()
       .disposer((client) => client.close()),

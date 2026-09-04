@@ -24,6 +24,9 @@ describe('application shutdown (integration)', () => {
       mongoUri: mongo.uri,
       mongoDbName: 'shutdown_test',
       logLevel: 'silent',
+      accessTokenSecret: 'test-access-token-secret-0123456789abcdef',
+      authRateLimitMax: 10,
+      authRateLimitWindowMs: 900_000,
     };
 
     const app = await buildApp(config);

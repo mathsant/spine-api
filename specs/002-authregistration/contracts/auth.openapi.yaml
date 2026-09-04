@@ -1,0 +1,275 @@
+openapi: 3.1.0
+info:
+  title: better-books — auth
+  version: 0.1.0
+  description: >
+    Contrato dos endpoints de autenticação e cadastro entregues pela feature
+    002-authregistration. Referência: spec RF-001..RF-043. Todos sob o prefixo /v1.
+    Tokens trafegam em JSON no corpo (sem cookies — RF-041).
+
+servers:
+  - url: /v1
+
+paths:
+  /auth/signup:
+    post:
+      operationId: signup
+      summary: Cria uma conta. Não autentica (não retorna tokens — RF-011).
+      description: Rate-limited por IP (RF-037).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SignupRequest" }
+      responses:
+        "201":
+          description: Conta criada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicUser" }
+        "400":
+          description: Corpo inválido (senha curta, handle fora do padrão, displayName vazio).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "409":
+          description: e-mail (EMAIL_ALREADY_IN_USE) ou handle (HANDLE_ALREADY_IN_USE) já em uso.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          description: TOO_MANY_REQUESTS — limite de cadastro por IP excedido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /auth/login:
+    post:
+      operationId: login
+      summary: Autentica com e-mail e senha; cria uma sessão de refresh (RF-012..RF-015).
+      description: Rate-limited por IP + e-mail alvo (RF-037).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Par de tokens emitido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "400":
+          description: Corpo inválido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          description: >
+            INVALID_CREDENTIALS — e-mail inexistente OU senha errada (mensagem genérica
+            idêntica nos dois casos — RF-014).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          description: TOO_MANY_REQUESTS — tentativas de login acima do limite na janela.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /auth/refresh:
+    post:
+      operationId: refresh
+      summary: Troca o refresh token por um novo par, rotacionando (RF-021..RF-028).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200":
+          description: Novo par emitido; o refresh token enviado foi invalidado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "400":
+          description: Corpo inválido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          description: >
+            INVALID_REFRESH_TOKEN (desconhecido / sessão revogada),
+            REFRESH_TOKEN_EXPIRED (sessão inativa > 30 dias),
+            REFRESH_TOKEN_REUSE_DETECTED (elo já rotacionado — a sessão inteira é revogada).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Revoga a sessão do refresh token informado. Idempotente (RF-029..RF-031).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogoutRequest" }
+      responses:
+        "204":
+          description: >
+            Sessão revogada, OU o token era desconhecido/já inválido — a resposta é 204
+            nos dois casos (não vaza se o token existia — RF-030).
+        "400":
+          description: Corpo inválido (campo ausente).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      summary: Troca a senha do usuário autenticado; revoga as demais sessões (RF-033..RF-036).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "204":
+          description: >
+            Senha alterada. Todas as outras sessões de refresh da conta foram revogadas;
+            a sessão corrente é preservada se `refreshToken` válido dela foi enviado.
+        "400":
+          description: nova senha fora da política (VALIDATION_ERROR).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          description: >
+            UNAUTHENTICATED / INVALID_ACCESS_TOKEN (sem sessão válida) ou
+            INVALID_CREDENTIALS (senha atual errada — RF-034).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /me:
+    get:
+      operationId: getMe
+      summary: Identidade do usuário autenticado (RF-032). Sem edição de perfil.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dono do access token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicUser" }
+        "401":
+          description: >
+            UNAUTHENTICATED (sem header / esquema ≠ Bearer / Bearer vazio — RF-019) ou
+            INVALID_ACCESS_TOKEN (expirado, malformado, assinatura inválida, conta
+            inexistente — RF-016/RF-018).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    SignupRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, handle, displayName]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 8, maxLength: 72 }
+        handle: { type: string, pattern: "^[A-Za-z0-9_]{3,30}$" }
+        displayName: { type: string, minLength: 1, maxLength: 50 }
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 72 }
+
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, minLength: 1 }
+
+    LogoutRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, minLength: 1 }
+
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 72 }
+        newPassword: { type: string, minLength: 8, maxLength: 72 }
+        refreshToken:
+          type: string
+          minLength: 1
+          description: >
+            Refresh token da sessão corrente. Se presente e válido para esta conta, a
+            sessão é preservada; senão todas as sessões são revogadas (RF-036).
+
+    PublicUser:
+      type: object
+      additionalProperties: false
+      required: [id, email, handle, displayName, createdAt]
+      properties:
+        id: { type: string, description: ObjectId hex de 24 chars }
+        email: { type: string, format: email }
+        handle: { type: string, pattern: "^[a-z0-9_]{3,30}$" }
+        displayName: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    TokenPair:
+      type: object
+      additionalProperties: false
+      required: [accessToken, refreshToken, tokenType, expiresIn]
+      properties:
+        accessToken: { type: string, description: JWT HS256 (sub, iat, exp) }
+        refreshToken: { type: string, description: token opaco base64url (32 bytes) }
+        tokenType: { type: string, enum: [Bearer] }
+        expiresIn: { type: integer, enum: [900], description: vida do access token em segundos }
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, statusCode]
+          properties:
+            code: { type: string, pattern: "^[A-Z][A-Z0-9_]*$" }
+            message: { type: string }
+            statusCode: { type: integer, minimum: 400, maximum: 599 }
+            details:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [path, message]
+                properties:
+                  path: { type: string }
+                  message: { type: string }
