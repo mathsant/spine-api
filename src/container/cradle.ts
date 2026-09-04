@@ -7,6 +7,7 @@ import type { FollowRequestRepository } from '../repositories/follow-requests';
 import type { FollowRepository } from '../repositories/follows';
 import type { HealthRepository } from '../repositories/health';
 import type { ReadingSessionRepository } from '../repositories/reading-sessions';
+import type { ReviewRepository } from '../repositories/reviews';
 import type { ShelfMembershipRepository } from '../repositories/shelf-memberships';
 import type { UserRepository } from '../repositories/users';
 import type {
@@ -29,6 +30,7 @@ import type {
   StartReading,
   UpdateProgress,
 } from '../services/reading-sessions';
+import type { CreateReview, DeleteReview, EditReview } from '../services/reviews';
 import type { SearchUsers } from '../services/users';
 import type {
   ApproveFollowRequest,
@@ -65,6 +67,7 @@ export interface AppCradle {
   readingSessionRepository: ReadingSessionRepository;
   followRequestRepository: FollowRequestRepository;
   followRepository: FollowRepository;
+  reviewRepository: ReviewRepository;
   getHealthService: GetHealth;
   authenticateService: Authenticate;
   signupService: Signup;
@@ -95,4 +98,7 @@ export interface AppCradle {
   listFollowRequestsService: ListFollowRequests;
   listFollowersService: ListFollowers;
   listFollowingService: ListFollowing;
+  createReviewService: CreateReview;
+  editReviewService: EditReview;
+  deleteReviewService: DeleteReview;
 }

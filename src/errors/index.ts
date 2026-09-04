@@ -22,3 +22,6 @@ export { CannotFollowSelfError } from './cannot-follow-self-error';
 export { AlreadyFollowingError } from './already-following-error';
 export { FollowRequestNotFoundError } from './follow-request-not-found-error';
 export { FollowNotFoundError } from './follow-not-found-error';
+export { ReviewNotFoundError } from './review-not-found-error';
+export { ReviewAlreadyExistsError } from './review-already-exists-error';
+export { ReadingSessionNotFinishedError } from './reading-session-not-finished-error';

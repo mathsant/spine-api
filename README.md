@@ -128,6 +128,26 @@ user returns `404 READING_SESSION_NOT_FOUND`, the same as a nonexistent one.
 | `DELETE /v1/reading-sessions/:sessionId`        | —                                           | `204` | `401`, `404` |
 | `GET /v1/me/reading-sessions`                   | `bookId?`, `cursor?`, `limit?`             | `200` `{ items, nextCursor }` | `401` |
 
+## Reviews
+
+All endpoints are under `/v1` and require `Authorization: Bearer <accessToken>`. A review is
+1:1 with a reading session — created via `POST /v1/reading-sessions/:sessionId/review`, then
+edited/deleted via `/v1/reviews/:reviewId`. The session must belong to the caller and be
+`finished`; a session still `reading` gets `409 READING_SESSION_NOT_FINISHED`, and a session
+that already has a review gets `409 REVIEW_ALREADY_EXISTS` on a second attempt. Editing accepts
+any subset of `rating`/`text`/`containsSpoiler` (at least one); `text` can be set to `null` to
+clear it. Deleting a reading session (existing endpoint above) cascades to its review. A
+`:sessionId`/`:reviewId` that doesn't exist or belongs to another user is `404`, never `403`.
+`GET /v1/books/:olid` now returns real `aggregates.averageRating`/`reviewCount` (rounded to 1
+decimal place) instead of always `null`/`0`, and `GET /v1/me/reading-sessions` embeds each
+item's `review` (or `null`). Run `pnpm migrate:up` once to create the `reviews` collection.
+
+| Method & path                                  | Body / query                                       | Success | Errors |
+| ----------------------------------------------- | --------------------------------------------------- | ------- | ------ |
+| `POST /v1/reading-sessions/:sessionId/review`   | `rating` (1–5), `text?` (≤2000), `containsSpoiler?` | `201` review | `400`, `401`, `404`, `409` `READING_SESSION_NOT_FINISHED`, `409` `REVIEW_ALREADY_EXISTS` |
+| `PATCH /v1/reviews/:reviewId`                   | `rating?` (1–5), `text?` (≤2000, nullable), `containsSpoiler?` — at least one | `200` updated review | `400`, `401`, `404` `REVIEW_NOT_FOUND` |
+| `DELETE /v1/reviews/:reviewId`                  | —                                                     | `204` | `401`, `404` `REVIEW_NOT_FOUND` |
+
 ## Profile & Follow
 
 All endpoints are under `/v1` and require `Authorization: Bearer <accessToken>`. `GET /v1/me`

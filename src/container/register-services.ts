@@ -38,6 +38,7 @@ import {
   makeStartReading,
   makeUpdateProgress,
 } from '../services/reading-sessions';
+import { makeCreateReview, makeDeleteReview, makeEditReview } from '../services/reviews';
 import type { AppCradle } from './cradle';
 
 export function registerServices(container: AwilixContainer<AppCradle>): void {
@@ -135,6 +136,7 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
         bookRepository: cradle.bookRepository,
         openLibraryClient: cradle.openLibraryClient,
         readingSessionRepository: cradle.readingSessionRepository,
+        reviewRepository: cradle.reviewRepository,
       }),
     ).singleton(),
     markWantToReadService: asFunction((cradle: AppCradle) =>
@@ -186,10 +188,28 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
       makeEditReadingSession({ readingSessionRepository: cradle.readingSessionRepository }),
     ).singleton(),
     deleteReadingSessionService: asFunction((cradle: AppCradle) =>
-      makeDeleteReadingSession({ readingSessionRepository: cradle.readingSessionRepository }),
+      makeDeleteReadingSession({
+        readingSessionRepository: cradle.readingSessionRepository,
+        reviewRepository: cradle.reviewRepository,
+      }),
     ).singleton(),
     listReadingSessionsService: asFunction((cradle: AppCradle) =>
-      makeListReadingSessions({ readingSessionRepository: cradle.readingSessionRepository }),
+      makeListReadingSessions({
+        readingSessionRepository: cradle.readingSessionRepository,
+        reviewRepository: cradle.reviewRepository,
+      }),
+    ).singleton(),
+    createReviewService: asFunction((cradle: AppCradle) =>
+      makeCreateReview({
+        reviewRepository: cradle.reviewRepository,
+        readingSessionRepository: cradle.readingSessionRepository,
+      }),
+    ).singleton(),
+    editReviewService: asFunction((cradle: AppCradle) =>
+      makeEditReview({ reviewRepository: cradle.reviewRepository }),
+    ).singleton(),
+    deleteReviewService: asFunction((cradle: AppCradle) =>
+      makeDeleteReview({ reviewRepository: cradle.reviewRepository }),
     ).singleton(),
   });
 }
