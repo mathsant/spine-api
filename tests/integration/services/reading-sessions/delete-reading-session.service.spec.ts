@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ReadingSessionNotFoundError } from '../../../../src/errors';
 import { MongoActivityRepository } from '../../../../src/repositories/activities';
 import { MongoCommentRepository } from '../../../../src/repositories/comments';
+import { MongoNotificationRepository } from '../../../../src/repositories/notifications';
 import { MongoReactionRepository } from '../../../../src/repositories/reactions';
 import { MongoReadingSessionRepository } from '../../../../src/repositories/reading-sessions';
 import { MongoReviewRepository } from '../../../../src/repositories/reviews';
@@ -24,6 +25,7 @@ describe('delete-reading-session service (integration)', () => {
   let activityRepository: MongoActivityRepository;
   let commentRepository: MongoCommentRepository;
   let reactionRepository: MongoReactionRepository;
+  let notificationRepository: MongoNotificationRepository;
   let deleteReadingSession: ReturnType<typeof makeDeleteReadingSession>;
 
   beforeAll(async () => {
@@ -39,7 +41,7 @@ describe('delete-reading-session service (integration)', () => {
 
   beforeEach(async () => {
     await Promise.all(
-      ['reading_sessions', 'reviews', 'activities', 'comments', 'reactions'].map((c) =>
+      ['reading_sessions', 'reviews', 'activities', 'comments', 'reactions', 'notifications'].map((c) =>
         db.collection(c).deleteMany({}),
       ),
     );
@@ -48,12 +50,14 @@ describe('delete-reading-session service (integration)', () => {
     activityRepository = new MongoActivityRepository(db);
     commentRepository = new MongoCommentRepository(db);
     reactionRepository = new MongoReactionRepository(db);
+    notificationRepository = new MongoNotificationRepository(db);
     deleteReadingSession = makeDeleteReadingSession({
       readingSessionRepository,
       reviewRepository,
       activityRepository,
       commentRepository,
       reactionRepository,
+      notificationRepository,
     });
   });
 
@@ -127,5 +131,28 @@ describe('delete-reading-session service (integration)', () => {
 
     expect((await commentRepository.listByActivity(activity.id, null, 20)).items).toHaveLength(0);
     expect((await reactionRepository.countByActivityIds([activity.id])).size).toBe(0);
+  });
+
+  it('cascades the delete to notifications tied to the session (008, RF-010)', async () => {
+    const session = await readingSessionRepository.startReading(userId, bookId, new Date());
+    const activity = await activityRepository.record(
+      { type: 'progress_update', actorId: userId, bookId, readingSessionId: session.id, currentPage: 10 },
+      new Date(),
+    );
+    await notificationRepository.create(
+      {
+        recipientId: userId,
+        actorId: otherUserId,
+        type: 'reaction_on_content',
+        activityId: activity.id,
+        readingSessionId: session.id,
+        activityType: 'progress_update',
+      },
+      new Date(),
+    );
+
+    await deleteReadingSession({ userId, sessionId: session.id });
+
+    expect(await notificationRepository.countUnread(userId)).toBe(0);
   });
 });

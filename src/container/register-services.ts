@@ -40,6 +40,13 @@ import {
   makeStartReading,
   makeUpdateProgress,
 } from '../services/reading-sessions';
+import {
+  makeCreateNotification,
+  makeGetUnreadNotificationCount,
+  makeListNotifications,
+  makeMarkAllNotificationsRead,
+  makeMarkNotificationRead,
+} from '../services/notifications';
 import { makeCreateReaction, makeDeleteReaction } from '../services/reactions';
 import { makeCreateReview, makeDeleteReview, makeEditReview } from '../services/reviews';
 import { makeGetFeed } from '../services/feed';
@@ -49,6 +56,21 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
   container.register({
     getHealthService: asFunction((cradle: AppCradle) =>
       makeGetHealth({ healthRepository: cradle.healthRepository }),
+    ).singleton(),
+    createNotificationService: asFunction((cradle: AppCradle) =>
+      makeCreateNotification({ notificationRepository: cradle.notificationRepository, clock: cradle.clock }),
+    ).singleton(),
+    listNotificationsService: asFunction((cradle: AppCradle) =>
+      makeListNotifications({ notificationRepository: cradle.notificationRepository }),
+    ).singleton(),
+    getUnreadNotificationCountService: asFunction((cradle: AppCradle) =>
+      makeGetUnreadNotificationCount({ notificationRepository: cradle.notificationRepository }),
+    ).singleton(),
+    markNotificationReadService: asFunction((cradle: AppCradle) =>
+      makeMarkNotificationRead({ notificationRepository: cradle.notificationRepository, clock: cradle.clock }),
+    ).singleton(),
+    markAllNotificationsReadService: asFunction((cradle: AppCradle) =>
+      makeMarkAllNotificationsRead({ notificationRepository: cradle.notificationRepository, clock: cradle.clock }),
     ).singleton(),
     resolveVisibleActivityService: asFunction((cradle: AppCradle) =>
       makeResolveVisibleActivity({
@@ -98,6 +120,7 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
         userRepository: cradle.userRepository,
         followRepository: cradle.followRepository,
         followRequestRepository: cradle.followRequestRepository,
+        createNotification: cradle.createNotificationService,
         clock: cradle.clock,
       }),
     ).singleton(),
@@ -108,11 +131,16 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
       makeApproveFollowRequest({
         followRequestRepository: cradle.followRequestRepository,
         followRepository: cradle.followRepository,
+        notificationRepository: cradle.notificationRepository,
+        createNotification: cradle.createNotificationService,
         clock: cradle.clock,
       }),
     ).singleton(),
     rejectFollowRequestService: asFunction((cradle: AppCradle) =>
-      makeRejectFollowRequest({ followRequestRepository: cradle.followRequestRepository }),
+      makeRejectFollowRequest({
+        followRequestRepository: cradle.followRequestRepository,
+        notificationRepository: cradle.notificationRepository,
+      }),
     ).singleton(),
     unfollowService: asFunction((cradle: AppCradle) =>
       makeUnfollow({ followRepository: cradle.followRepository }),
@@ -212,6 +240,7 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
         activityRepository: cradle.activityRepository,
         commentRepository: cradle.commentRepository,
         reactionRepository: cradle.reactionRepository,
+        notificationRepository: cradle.notificationRepository,
       }),
     ).singleton(),
     listReadingSessionsService: asFunction((cradle: AppCradle) =>
@@ -237,12 +266,14 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
         activityRepository: cradle.activityRepository,
         commentRepository: cradle.commentRepository,
         reactionRepository: cradle.reactionRepository,
+        notificationRepository: cradle.notificationRepository,
       }),
     ).singleton(),
     createCommentService: asFunction((cradle: AppCradle) =>
       makeCreateComment({
         commentRepository: cradle.commentRepository,
         resolveVisibleActivity: cradle.resolveVisibleActivityService,
+        createNotification: cradle.createNotificationService,
         clock: cradle.clock,
       }),
     ).singleton(),
@@ -253,12 +284,17 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
       }),
     ).singleton(),
     deleteCommentService: asFunction((cradle: AppCradle) =>
-      makeDeleteComment({ commentRepository: cradle.commentRepository, clock: cradle.clock }),
+      makeDeleteComment({
+        commentRepository: cradle.commentRepository,
+        notificationRepository: cradle.notificationRepository,
+        clock: cradle.clock,
+      }),
     ).singleton(),
     createReactionService: asFunction((cradle: AppCradle) =>
       makeCreateReaction({
         reactionRepository: cradle.reactionRepository,
         resolveVisibleActivity: cradle.resolveVisibleActivityService,
+        createNotification: cradle.createNotificationService,
         clock: cradle.clock,
       }),
     ).singleton(),
@@ -266,6 +302,7 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
       makeDeleteReaction({
         reactionRepository: cradle.reactionRepository,
         resolveVisibleActivity: cradle.resolveVisibleActivityService,
+        notificationRepository: cradle.notificationRepository,
       }),
     ).singleton(),
     getFeedService: asFunction((cradle: AppCradle) =>

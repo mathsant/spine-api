@@ -5,8 +5,10 @@ import { ActivityNotFoundError } from '../../../../src/errors';
 import { MongoActivityRepository } from '../../../../src/repositories/activities';
 import { MongoCommentRepository } from '../../../../src/repositories/comments';
 import { MongoFollowRepository } from '../../../../src/repositories/follows';
+import { MongoNotificationRepository } from '../../../../src/repositories/notifications';
 import { makeResolveVisibleActivity } from '../../../../src/services/activities';
 import { makeCreateComment, makeListComments } from '../../../../src/services/comments';
+import { makeCreateNotification } from '../../../../src/services/notifications';
 import { type MongoMemory, startMongoMemory } from '../../../helpers/mongo-memory';
 
 const owner = '507f1f77bcf86cd799439011';
@@ -34,12 +36,20 @@ describe('list-comments service (integration)', () => {
   });
 
   beforeEach(async () => {
-    await Promise.all(['activities', 'follows', 'comments'].map((c) => db.collection(c).deleteMany({})));
+    await Promise.all(
+      ['activities', 'follows', 'comments', 'notifications'].map((c) => db.collection(c).deleteMany({})),
+    );
     activityRepository = new MongoActivityRepository(db);
     followRepository = new MongoFollowRepository(db);
     commentRepository = new MongoCommentRepository(db);
+    const notificationRepository = new MongoNotificationRepository(db);
     const resolveVisibleActivity = makeResolveVisibleActivity({ activityRepository, followRepository });
-    createComment = makeCreateComment({ commentRepository, resolveVisibleActivity, clock: { now: () => new Date() } });
+    createComment = makeCreateComment({
+      commentRepository,
+      resolveVisibleActivity,
+      createNotification: makeCreateNotification({ notificationRepository, clock: { now: () => new Date() } }),
+      clock: { now: () => new Date() },
+    });
     listComments = makeListComments({ commentRepository, resolveVisibleActivity });
   });
 

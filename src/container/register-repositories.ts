@@ -7,6 +7,7 @@ import { MongoCommentRepository } from '../repositories/comments';
 import { MongoFollowRequestRepository } from '../repositories/follow-requests';
 import { MongoFollowRepository } from '../repositories/follows';
 import { MongoHealthRepository } from '../repositories/health';
+import { MongoNotificationRepository } from '../repositories/notifications';
 import { MongoReactionRepository } from '../repositories/reactions';
 import { MongoReadingSessionRepository } from '../repositories/reading-sessions';
 import { MongoReviewRepository } from '../repositories/reviews';
@@ -51,6 +52,9 @@ export function registerRepositories(container: AwilixContainer<AppCradle>): voi
     ).singleton(),
     reactionRepository: asFunction(
       (cradle: AppCradle) => new MongoReactionRepository(cradle.db),
+    ).singleton(),
+    notificationRepository: asFunction(
+      (cradle: AppCradle) => new MongoNotificationRepository(cradle.db),
     ).singleton(),
   });
 }

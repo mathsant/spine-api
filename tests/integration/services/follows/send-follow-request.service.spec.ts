@@ -4,7 +4,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AlreadyFollowingError, CannotFollowSelfError, NotFoundError } from '../../../../src/errors';
 import { MongoFollowRequestRepository } from '../../../../src/repositories/follow-requests';
 import { MongoFollowRepository } from '../../../../src/repositories/follows';
+import { MongoNotificationRepository } from '../../../../src/repositories/notifications';
 import { MongoUserRepository } from '../../../../src/repositories/users';
+import { makeCreateNotification } from '../../../../src/services/notifications';
 import { makeSendFollowRequest } from '../../../../src/services/follows';
 import { ensureAuthIndexes } from '../../../helpers/auth-indexes';
 import { ensureFollowIndexes } from '../../../helpers/follow-indexes';
@@ -18,6 +20,7 @@ describe('send-follow-request service (integration)', () => {
   let userRepository: MongoUserRepository;
   let followRequestRepository: MongoFollowRequestRepository;
   let followRepository: MongoFollowRepository;
+  let notificationRepository: MongoNotificationRepository;
   let sendFollowRequest: ReturnType<typeof makeSendFollowRequest>;
 
   beforeAll(async () => {
@@ -33,15 +36,17 @@ describe('send-follow-request service (integration)', () => {
 
   beforeEach(async () => {
     await Promise.all(
-      ['users', 'follow_requests', 'follows'].map((c) => db.collection(c).deleteMany({})),
+      ['users', 'follow_requests', 'follows', 'notifications'].map((c) => db.collection(c).deleteMany({})),
     );
     userRepository = new MongoUserRepository(db);
     followRequestRepository = new MongoFollowRequestRepository(db);
     followRepository = new MongoFollowRepository(db);
+    notificationRepository = new MongoNotificationRepository(db);
     sendFollowRequest = makeSendFollowRequest({
       userRepository,
       followRepository,
       followRequestRepository,
+      createNotification: makeCreateNotification({ notificationRepository, clock }),
       clock,
     });
   });
@@ -75,6 +80,25 @@ describe('send-follow-request service (integration)', () => {
 
     expect(first.created).toBe(true);
     expect(second.created).toBe(false);
+  });
+
+  it('notifies the target of a new pending request (008 scenario 1, RF-001)', async () => {
+    const a = await createUser('alice');
+    const b = await createUser('bob');
+
+    await sendFollowRequest({ requesterId: a.id, targetId: b.id });
+
+    expect(await notificationRepository.countUnread(b.id)).toBe(1);
+  });
+
+  it('does not duplicate the notification on a repeated pending request (008, D1)', async () => {
+    const a = await createUser('alice');
+    const b = await createUser('bob');
+
+    await sendFollowRequest({ requesterId: a.id, targetId: b.id });
+    await sendFollowRequest({ requesterId: a.id, targetId: b.id });
+
+    expect(await notificationRepository.countUnread(b.id)).toBe(1);
   });
 
   it('rejects a request targeting yourself (RF-006)', async () => {

@@ -1,0 +1,133 @@
+openapi: 3.1.0
+info:
+  title: better-books — notification flow
+  version: 0.1.0
+  description: >
+    Contrato dos 4 endpoints novos entregues pela feature 008-notificationflow. Referência:
+    spec RF-011..RF-017. Sob o prefixo /v1 e exige `Authorization: Bearer <accessToken>`.
+    Toda rota opera sobre o usuário autenticado — nunca sobre um `:userId` de terceiro.
+
+servers:
+  - url: /v1
+
+security:
+  - bearerAuth: []
+
+paths:
+  /me/notifications:
+    get:
+      operationId: listNotifications
+      summary: Lista as notificações do usuário autenticado, mais recente primeiro, paginado por cursor (RF-011, RF-012).
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string, minLength: 1 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Página de notificações (possivelmente vazia).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationCursorPage" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /me/notifications/unread-count:
+    get:
+      operationId: getUnreadNotificationCount
+      summary: Contagem de notificações não lidas do usuário autenticado (RF-016).
+      responses:
+        "200":
+          description: Contagem atual.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnreadNotificationCount" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /notifications/{notificationId}/read:
+    post:
+      operationId: markNotificationRead
+      summary: Marca uma notificação própria como lida; idempotente (RF-013, RF-012, RF-015).
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Marcada como lida (ou já estava — idempotente). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: Notificação não existe, ou não pertence ao usuário autenticado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      summary: Marca todas as notificações não lidas do usuário autenticado como lidas; idempotente (RF-014, RF-015).
+      responses:
+        "204": { description: Todas marcadas como lidas (ou já não havia nenhuma não lida). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    ValidationError:
+      description: Querystring inválido (`cursor` malformado, `limit` fora do intervalo).
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    Unauthenticated:
+      description: Token de acesso ausente ou inválido.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, statusCode]
+          properties:
+            code: { type: string, pattern: "^[A-Z][A-Z0-9_]*$" }
+            message: { type: string }
+            statusCode: { type: integer }
+            details: {}
+
+    Notification:
+      type: object
+      required: [id, type, actorId, activityId, commentId, read, createdAt]
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [follow_request, follow_approved, comment_on_content, comment_reply, reaction_on_content]
+        actorId: { type: string }
+        activityId: { type: [string, "null"] }
+        commentId: { type: [string, "null"] }
+        read: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    NotificationCursorPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Notification" }
+        nextCursor: { type: [string, "null"] }
+
+    UnreadNotificationCount:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer, minimum: 0 }

@@ -1,6 +1,7 @@
 import { ReviewNotFoundError } from '../../errors';
 import type { ActivityRepository } from '../../repositories/activities';
 import type { CommentRepository } from '../../repositories/comments';
+import type { NotificationRepository } from '../../repositories/notifications';
 import type { ReactionRepository } from '../../repositories/reactions';
 import type { ReviewRepository } from '../../repositories/reviews';
 
@@ -16,16 +17,24 @@ export interface DeleteReviewDeps {
   activityRepository: ActivityRepository;
   commentRepository: CommentRepository;
   reactionRepository: ReactionRepository;
+  notificationRepository: NotificationRepository;
 }
 
 /**
  * Deletes a review owned by the user (RF-006). Ownership checked here (D7/D9). Cascades the
  * delete to the session's `review_published` activity event only — other event types of the
- * same session (e.g. `started_reading`) are untouched (006, D4 of research.md) — and to the
- * comments/reactions of that same event (007, RF-013).
+ * same session (e.g. `started_reading`) are untouched (006, D4 of research.md) — to the
+ * comments/reactions of that same event (007, RF-013), and to the notifications tied to it
+ * (008, RF-010, D5 of research.md).
  */
 export const makeDeleteReview =
-  ({ reviewRepository, activityRepository, commentRepository, reactionRepository }: DeleteReviewDeps): DeleteReview =>
+  ({
+    reviewRepository,
+    activityRepository,
+    commentRepository,
+    reactionRepository,
+    notificationRepository,
+  }: DeleteReviewDeps): DeleteReview =>
   async ({ userId, reviewId }) => {
     const existing = await reviewRepository.findById(reviewId);
     if (!existing || existing.userId !== userId) {
@@ -36,4 +45,5 @@ export const makeDeleteReview =
     await activityRepository.deleteBySessionIdAndType(existing.sessionId, 'review_published');
     await commentRepository.deleteByReadingSessionIdAndType(existing.sessionId, 'review_published');
     await reactionRepository.deleteByReadingSessionIdAndType(existing.sessionId, 'review_published');
+    await notificationRepository.deleteByReadingSessionIdAndType(existing.sessionId, 'review_published');
   };

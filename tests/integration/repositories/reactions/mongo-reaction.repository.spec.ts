@@ -37,6 +37,14 @@ describe('MongoReactionRepository (integration)', () => {
     expect(counts.get(activityId)).toBe(1);
   });
 
+  it('add returns true only when it actually inserted a new reaction (D1 of 008 research.md)', async () => {
+    const createdNow = await repo.add(activityId, userId, sessionId, 'progress_update', new Date());
+    const createdAgain = await repo.add(activityId, userId, sessionId, 'progress_update', new Date());
+
+    expect(createdNow).toBe(true);
+    expect(createdAgain).toBe(false);
+  });
+
   it('remove returns true when something was removed, false otherwise (RF-003)', async () => {
     await repo.add(activityId, userId, sessionId, 'progress_update', new Date());
 
