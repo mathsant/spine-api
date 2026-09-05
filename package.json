@@ -19,6 +19,7 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "docs:lint": "redocly lint docs/openapi.yaml",
     "migrate:up": "migrate-mongo up",
     "migrate:down": "migrate-mongo down",
     "migrate:create": "migrate-mongo create"
@@ -32,6 +33,7 @@
     "zod": "^4.5.0"
   },
   "devDependencies": {
+    "@redocly/cli": "^2.51.2",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^5.0.0",
     "eslint": "^9.0.0",

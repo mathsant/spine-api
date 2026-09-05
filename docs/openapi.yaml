@@ -1,0 +1,1188 @@
+openapi: 3.1.0
+info:
+  title: better-books API
+  version: v1
+  license:
+    name: Proprietary — uso interno, não distribuído sob licença open source
+  description: >
+    Rede social para leitores — registro de leitura, avaliação, follow com aprovação
+    e feed de atividade. Este documento consolida, num único contrato organizado por
+    domínio de negócio, os 8 OpenAPI que antes viviam um por feature em
+    `specs/00N-*/contracts/*.openapi.yaml` (001 a 008). Ele é a fonte única da verdade
+    para quem consome a API — não é necessário voltar aos contratos antigos.
+
+    Todo endpoint (exceto os marcados como públicos abaixo) exige
+    `Authorization: Bearer <accessToken>`. Ver `auth-guide.md` para como obter e renovar
+    o token. Toda lista paginada usa cursor opaco — ver `pagination-guide.md`. Toda
+    resposta de erro segue o mesmo envelope — ver `error-catalog.md`. Um erro à parte,
+    `DATABASE_UNAVAILABLE` (503), pode ocorrer em **qualquer** endpoint que dependa do
+    MongoDB e por isso não é repetido em cada operação abaixo — só no catálogo.
+
+    ## Notas de consolidação (RF-002, RF-020 — divergências corrigidas a favor do código)
+
+    - `FeedItem` ganhou `reactionsCount` e `hasReacted` — presentes na implementação
+      (`src/services/feed/types.ts`) mas ausentes no `feed.openapi.yaml` original (006),
+      escrito antes de a feature 007-interactions adicionar reações.
+    - `ReadingSession` inclui `review` em **toda** resposta desse formato (iniciar leitura,
+      progresso, finalizar, editar, listar) — não só na listagem, como o comentário do
+      `reviews.openapi.yaml` original (005) sugeria. `toReadingSessionDTO`
+      (`src/services/reading-sessions/to-dto.ts`) sempre inclui o campo.
+    - `GET /me` (retorna `PublicUser`, com `email`/`createdAt`) e `PATCH /me` (retorna
+      `Profile`, sem esses dois campos) têm formas diferentes de propósito — não é erro,
+      mas quem editar o perfil e precisar de `email`/`createdAt` atualizados deve buscar
+      `GET /me` de novo depois do `PATCH`.
+
+servers:
+  - url: /v1
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+    description: Cadastro, login, sessão (refresh/logout) e identidade do usuário autenticado.
+  - name: profile
+    description: Edição do próprio perfil.
+  - name: users
+    description: Busca de usuários.
+  - name: follows
+    description: Pedido de follow, aprovação/recusa, seguidores e seguindo.
+  - name: books
+    description: Catálogo de livros (Open Library) e marcação de want-to-read.
+  - name: reading-sessions
+    description: Ciclo de leitura de um livro — iniciar, progresso, finalizar, editar, histórico.
+  - name: reviews
+    description: Avaliação (nota + texto + spoiler) de uma reading session finalizada.
+  - name: feed
+    description: Atividade paginada de quem o usuário segue (aprovado) e do próprio usuário.
+  - name: comments
+    description: Comentários (1 nível de resposta) em um item de feed.
+  - name: reactions
+    description: Curtida simples em um item de feed.
+  - name: notifications
+    description: Notificações de eventos relevantes para o usuário (follow, comentário, curtida).
+  - name: health
+    description: Liveness/readiness da aplicação.
+
+paths:
+  # ---------------------------------------------------------------- auth
+  /auth/signup:
+    post:
+      tags: [auth]
+      operationId: signup
+      summary: Cria uma conta. Não autentica (não retorna tokens).
+      description: Rate-limited por IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SignupRequest" }
+      responses:
+        "201":
+          description: Conta criada.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicUser" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409":
+          description: "`EMAIL_ALREADY_IN_USE` ou `HANDLE_ALREADY_IN_USE`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+        "429":
+          description: "`TOO_MANY_REQUESTS` — limite de cadastro por IP excedido."
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Autentica com e-mail e senha; cria uma sessão de refresh.
+      description: Rate-limited por IP + e-mail alvo.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Par de tokens emitido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401":
+          description: >
+            `INVALID_CREDENTIALS` — e-mail inexistente OU senha errada (mensagem
+            idêntica nos dois casos, de propósito — não revela se a conta existe).
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+        "429":
+          description: "`TOO_MANY_REQUESTS` — tentativas de login acima do limite na janela."
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refresh
+      summary: Troca o refresh token por um novo par, rotacionando.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200":
+          description: Novo par emitido; o refresh token enviado foi invalidado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401":
+          description: >
+            `INVALID_REFRESH_TOKEN` (desconhecido/sessão revogada),
+            `REFRESH_TOKEN_EXPIRED` (sessão inativa > 30 dias), ou
+            `REFRESH_TOKEN_REUSE_DETECTED` (elo já rotacionado — a sessão inteira é
+            revogada como efeito colateral). Ver `auth-guide.md`.
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoga a sessão do refresh token informado. Idempotente.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogoutRequest" }
+      responses:
+        "204":
+          description: >
+            Sessão revogada, OU o token já era desconhecido/inválido — resposta 204
+            nos dois casos (não vaza se o token existia).
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /auth/change-password:
+    post:
+      tags: [auth]
+      operationId: changePassword
+      summary: Troca a senha do usuário autenticado; revoga as demais sessões.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "204":
+          description: >
+            Senha alterada. As outras sessões de refresh da conta foram revogadas;
+            a sessão corrente é preservada se `refreshToken` válido dela foi enviado.
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401":
+          description: >
+            `UNAUTHENTICATED`/`INVALID_ACCESS_TOKEN` (sem sessão válida) ou
+            `INVALID_CREDENTIALS` (senha atual errada).
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+
+  /me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      summary: Identidade do usuário autenticado (com `email`/`createdAt`). Sem edição.
+      responses:
+        "200":
+          description: Dono do access token.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicUser" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+    patch:
+      tags: [profile]
+      operationId: editProfile
+      summary: Edita `displayName` e/ou `bio` do próprio perfil. `handle` nunca é aceito (imutável).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditProfileRequest" }
+      responses:
+        "200":
+          description: >
+            Perfil atualizado. Forma menor que `GET /me` (sem `email`/`createdAt`) —
+            buscar `GET /me` de novo se precisar desses campos.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Profile" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  # ---------------------------------------------------------------- users
+  /users/search:
+    get:
+      tags: [users]
+      operationId: searchUsers
+      summary: Busca usuários por `@handle`/`displayName` — retorno mínimo (sem conteúdo de leitura).
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 100 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        "200":
+          description: Página de resultados.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserSearchPage" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  # ---------------------------------------------------------------- follows
+  /users/{userId}/follow-request:
+    post:
+      tags: [follows]
+      operationId: sendFollowRequest
+      summary: >
+        Envia pedido de follow para `:userId`. Idempotente se já pendente (200 em vez
+        de 201). Erro se for para si mesmo ou se já segue `:userId`.
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses:
+        "201": { description: Pedido novo criado., content: { application/json: { schema: { $ref: "#/components/schemas/FollowRequestResource" } } } }
+        "200": { description: Já havia um pedido pendente meu para `:userId`., content: { application/json: { schema: { $ref: "#/components/schemas/FollowRequestResource" } } } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`NOT_FOUND` — `:userId` não existe.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "409": { description: "`ALREADY_FOLLOWING`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "422": { description: "`CANNOT_FOLLOW_SELF`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    delete:
+      tags: [follows]
+      operationId: cancelFollowRequest
+      summary: Cancela meu pedido pendente para `:userId`.
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses:
+        "204": { description: Cancelado. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`FOLLOW_REQUEST_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /users/{userId}/follow-request/approve:
+    post:
+      tags: [follows]
+      operationId: approveFollowRequest
+      summary: Aprova o pedido pendente de `:userId` para mim. Não cria a relação inversa.
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses:
+        "204": { description: "Aprovado — relação `:userId` → eu criada." }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`FOLLOW_REQUEST_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /users/{userId}/follow-request/reject:
+    post:
+      tags: [follows]
+      operationId: rejectFollowRequest
+      summary: Recusa o pedido pendente de `:userId` para mim. O pedido é apagado. Nunca notifica.
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses:
+        "204": { description: Recusado — pedido apagado. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`FOLLOW_REQUEST_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /users/{userId}/follow:
+    delete:
+      tags: [follows]
+      operationId: unfollowUser
+      summary: Deixo de seguir `:userId`.
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses:
+        "204": { description: Deixei de seguir. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`FOLLOW_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /users/{userId}/follower:
+    delete:
+      tags: [follows]
+      operationId: removeFollower
+      summary: Removo `:userId` como meu seguidor.
+      parameters: [{ $ref: "#/components/parameters/UserId" }]
+      responses:
+        "204": { description: Removido. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`FOLLOW_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /me/follow-requests:
+    get:
+      tags: [follows]
+      operationId: listFollowRequests
+      summary: Lista meus pedidos de follow pendentes, recebidos ou enviados.
+      parameters:
+        - { name: direction, in: query, schema: { type: string, enum: [incoming, outgoing], default: incoming } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: Página de pedidos pendentes., content: { application/json: { schema: { $ref: "#/components/schemas/FollowRequestCursorPage" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /me/followers:
+    get:
+      tags: [follows]
+      operationId: listFollowers
+      summary: Lista meus seguidores aprovados. Visível só para mim.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: Página de seguidores., content: { application/json: { schema: { $ref: "#/components/schemas/FollowCursorPage" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /me/following:
+    get:
+      tags: [follows]
+      operationId: listFollowing
+      summary: Lista quem eu sigo, aprovados. Visível só para mim.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: Página de quem eu sigo., content: { application/json: { schema: { $ref: "#/components/schemas/FollowCursorPage" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  # ---------------------------------------------------------------- books
+  /books/search:
+    get:
+      tags: [books]
+      operationId: searchBooks
+      summary: Busca livros por título e/ou autor no Open Library.
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        "200": { description: Página de resultados., content: { application/json: { schema: { $ref: "#/components/schemas/BookSearchPage" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { description: "`OPEN_LIBRARY_UNAVAILABLE` — timeout/erro de rede/5xx do Open Library.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /books/{olid}:
+    get:
+      tags: [books]
+      operationId: getBook
+      summary: Detalhe de um livro (cache-on-read — grava no cache local na primeira interação).
+      parameters: [{ $ref: "#/components/parameters/Olid" }]
+      responses:
+        "200": { description: Livro cacheado., content: { application/json: { schema: { $ref: "#/components/schemas/BookDetail" } } } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`BOOK_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "503": { description: "`OPEN_LIBRARY_UNAVAILABLE`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /books/{olid}/want-to-read:
+    put:
+      tags: [books]
+      operationId: markWantToRead
+      summary: Marca "quero ler" (idempotente). Cacheia o livro se ainda não estiver.
+      parameters: [{ $ref: "#/components/parameters/Olid" }]
+      responses:
+        "204": { description: Marcado (ou já estava marcado). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`BOOK_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "503": { description: "`OPEN_LIBRARY_UNAVAILABLE`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    delete:
+      tags: [books]
+      operationId: unmarkWantToRead
+      summary: Remove "quero ler" (idempotente). Nunca cacheia nem chama o Open Library.
+      parameters: [{ $ref: "#/components/parameters/Olid" }]
+      responses:
+        "204": { description: Removido (ou já não estava marcado). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /books/{olid}/start-reading:
+    post:
+      tags: [books]
+      operationId: startReading
+      summary: >
+        Inicia a leitura. Se já houver session `reading` aberta pra esse livro,
+        reaproveita em vez de criar outra. Remove de want-to-read se presente.
+      parameters: [{ $ref: "#/components/parameters/Olid" }]
+      responses:
+        "200": { description: Session `reading` já aberta reaproveitada., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "201": { description: Nova session `reading` criada., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`BOOK_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "503": { description: "`OPEN_LIBRARY_UNAVAILABLE`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /books/{olid}/mark-finished:
+    post:
+      tags: [books]
+      operationId: markFinished
+      summary: >
+        Marca como lido diretamente, sem exigir session `reading` prévia. Sempre cria
+        uma nova session (permite releitura). Remove de want-to-read se presente.
+      parameters: [{ $ref: "#/components/parameters/Olid" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarkFinishedRequest" }
+      responses:
+        "201": { description: Session `finished` criada., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`BOOK_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "503": { description: "`OPEN_LIBRARY_UNAVAILABLE`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /me/want-to-read:
+    get:
+      tags: [books]
+      operationId: listWantToRead
+      summary: Lista os livros marcados como "quero ler" pelo usuário autenticado.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: Página do cursor., content: { application/json: { schema: { $ref: "#/components/schemas/BookCursorPage" } } } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  # ---------------------------------------------------------------- reading-sessions
+  /reading-sessions/{sessionId}/progress:
+    post:
+      tags: [reading-sessions]
+      operationId: updateReadingSessionProgress
+      summary: Registra a página atual numa session `reading`. Sem teto (não valida contra o total de páginas do livro).
+      parameters: [{ $ref: "#/components/parameters/SessionId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProgressRequest" }
+      responses:
+        "200": { description: Progresso atualizado., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`READING_SESSION_NOT_FOUND` — não existe ou pertence a outro usuário (as duas respostas são idênticas).", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "409": { description: "`INVALID_READING_SESSION_STATE` — a session não está `reading`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /reading-sessions/{sessionId}/finish:
+    post:
+      tags: [reading-sessions]
+      operationId: finishReadingSession
+      summary: Finaliza uma session `reading`. `finishedAt` vira agora se omitido. Remove de want-to-read se presente.
+      parameters: [{ $ref: "#/components/parameters/SessionId" }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FinishReadingSessionRequest" }
+      responses:
+        "200": { description: Session finalizada., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`READING_SESSION_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /reading-sessions/{sessionId}:
+    patch:
+      tags: [reading-sessions]
+      operationId: editReadingSession
+      summary: Corrige datas e/ou página atual de uma session existente. Ao menos 1 campo.
+      parameters: [{ $ref: "#/components/parameters/SessionId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditReadingSessionRequest" }
+      responses:
+        "200": { description: Session atualizada., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSession" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`READING_SESSION_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "422": { description: "`INVALID_READING_SESSION_DATES` — resultaria em `finishedAt` antes de `startedAt`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    delete:
+      tags: [reading-sessions]
+      operationId: deleteReadingSession
+      summary: Apaga uma session.
+      parameters: [{ $ref: "#/components/parameters/SessionId" }]
+      responses:
+        "204": { description: Apagada. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`READING_SESSION_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /me/reading-sessions:
+    get:
+      tags: [reading-sessions]
+      operationId: listReadingSessions
+      summary: Histórico paginado de reading sessions do usuário autenticado.
+      parameters:
+        - { name: bookId, in: query, required: false, schema: { type: string } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: Página do cursor., content: { application/json: { schema: { $ref: "#/components/schemas/ReadingSessionCursorPage" } } } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  # ---------------------------------------------------------------- reviews
+  /reading-sessions/{sessionId}/review:
+    post:
+      tags: [reviews]
+      operationId: createReview
+      summary: >
+        Cria a review de uma reading session própria `finished`. Rejeita se a session
+        não for `finished`, ou se já tiver review.
+      parameters: [{ $ref: "#/components/parameters/SessionId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateReviewRequest" }
+      responses:
+        "201": { description: Review criada., content: { application/json: { schema: { $ref: "#/components/schemas/Review" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`READING_SESSION_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "409":
+          description: "`READING_SESSION_NOT_FINISHED` ou `REVIEW_ALREADY_EXISTS` — distinguidos pelo `code`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+
+  /reviews/{reviewId}:
+    patch:
+      tags: [reviews]
+      operationId: editReview
+      summary: Edita parcialmente uma review própria — ao menos 1 campo.
+      parameters: [{ $ref: "#/components/parameters/ReviewId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditReviewRequest" }
+      responses:
+        "200": { description: Review atualizada., content: { application/json: { schema: { $ref: "#/components/schemas/Review" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`REVIEW_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    delete:
+      tags: [reviews]
+      operationId: deleteReview
+      summary: Apaga uma review própria.
+      parameters: [{ $ref: "#/components/parameters/ReviewId" }]
+      responses:
+        "204": { description: Apagada. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`REVIEW_NOT_FOUND`.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  # ---------------------------------------------------------------- feed
+  /feed:
+    get:
+      tags: [feed]
+      operationId: getFeed
+      summary: >
+        Feed de atividade paginado por cursor: mistura a própria atividade do usuário
+        autenticado com a de quem ele segue com follow aprovado, mais recente primeiro.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: Página do feed (possivelmente vazia)., content: { application/json: { schema: { $ref: "#/components/schemas/FeedCursorPage" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  # ---------------------------------------------------------------- comments
+  /activities/{activityId}/comments:
+    post:
+      tags: [comments]
+      operationId: createComment
+      summary: >
+        Comentar num item de feed; opcionalmente como resposta a outro comentário do
+        mesmo item — aninhamento de no máximo 1 nível.
+      parameters: [{ $ref: "#/components/parameters/ActivityId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCommentInput" }
+      responses:
+        "201": { description: Comentário criado., content: { application/json: { schema: { $ref: "#/components/schemas/Comment" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`COMMENT_NOT_FOUND` (`parentCommentId` inexistente/de outro item) ou 404 de `activityId` (ver nota abaixo).", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "422": { description: "`UNSUPPORTED_ACTIVITY_INTERACTION` (alvo `started_reading`) ou `COMMENT_NESTING_TOO_DEEP` (`parentCommentId` aponta pra uma resposta).", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    get:
+      tags: [comments]
+      operationId: listComments
+      summary: Lista os comentários de um item, ordem cronológica ascendente, paginado por cursor.
+      parameters:
+        - { $ref: "#/components/parameters/ActivityId" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: Página de comentários (possivelmente vazia)., content: { application/json: { schema: { $ref: "#/components/schemas/CommentCursorPage" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/ActivityNotFound" }
+        "422": { $ref: "#/components/responses/UnsupportedActivityInteraction" }
+
+  /comments/{commentId}:
+    delete:
+      tags: [comments]
+      operationId: deleteComment
+      summary: Apaga (soft delete) um comentário próprio; substituído por placeholder "[removido]" na leitura.
+      parameters:
+        - { name: commentId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Comentário apagado (soft delete). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`COMMENT_NOT_FOUND` — não existe ou não pertence ao usuário autenticado.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  # ---------------------------------------------------------------- reactions
+  /activities/{activityId}/reactions:
+    post:
+      tags: [reactions]
+      operationId: createReaction
+      summary: Curtir um item de feed (idempotente).
+      parameters: [{ $ref: "#/components/parameters/ActivityId" }]
+      responses:
+        "204": { description: Curtido (ou já estava curtido). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/ActivityNotFound" }
+        "422": { $ref: "#/components/responses/UnsupportedActivityInteraction" }
+    delete:
+      tags: [reactions]
+      operationId: deleteReaction
+      summary: Descurtir um item de feed.
+      parameters: [{ $ref: "#/components/parameters/ActivityId" }]
+      responses:
+        "204": { description: Curtida removida. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`ACTIVITY_NOT_FOUND` (item não existe/não visível) ou `REACTION_NOT_FOUND` (usuário não havia curtido).", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+        "422": { $ref: "#/components/responses/UnsupportedActivityInteraction" }
+
+  # ---------------------------------------------------------------- notifications
+  /me/notifications:
+    get:
+      tags: [notifications]
+      operationId: listNotifications
+      summary: Lista as notificações do usuário autenticado, mais recente primeiro, paginado por cursor.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: Página de notificações (possivelmente vazia)., content: { application/json: { schema: { $ref: "#/components/schemas/NotificationCursorPage" } } } }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /me/notifications/unread-count:
+    get:
+      tags: [notifications]
+      operationId: getUnreadNotificationCount
+      summary: Contagem de notificações não lidas do usuário autenticado. Pensado para polling.
+      responses:
+        "200": { description: Contagem atual., content: { application/json: { schema: { $ref: "#/components/schemas/UnreadNotificationCount" } } } }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /notifications/{notificationId}/read:
+    post:
+      tags: [notifications]
+      operationId: markNotificationRead
+      summary: Marca uma notificação própria como lida; idempotente.
+      parameters:
+        - { name: notificationId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Marcada como lida (ou já estava). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: "`NOTIFICATION_NOT_FOUND` — não existe ou não pertence ao usuário autenticado.", content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+
+  /notifications/read-all:
+    post:
+      tags: [notifications]
+      operationId: markAllNotificationsRead
+      summary: Marca todas as notificações não lidas do usuário autenticado como lidas; idempotente.
+      responses:
+        "204": { description: Todas marcadas como lidas (ou já não havia nenhuma não lida). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  # ---------------------------------------------------------------- health
+  /health:
+    get:
+      tags: [health]
+      operationId: getHealth
+      summary: Liveness/readiness da aplicação e da conexão com o MongoDB.
+      description: >
+        Sempre responde (não depende de o banco estar de pé). 200 quando o banco
+        responde ao ping; 503 quando não responde. O processo nunca cai por db down.
+      security: []
+      responses:
+        "200":
+          description: Aplicação saudável, banco acessível.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+              examples: { healthy: { value: { status: "ok", db: "up", uptime: 42 } } }
+        "503":
+          description: Aplicação no ar, banco inacessível.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+              examples: { degraded: { value: { status: "degraded", db: "down", uptime: 42 } } }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Olid: { name: olid, in: path, required: true, schema: { type: string, minLength: 1 } }
+    SessionId: { name: sessionId, in: path, required: true, schema: { type: string } }
+    ReviewId: { name: reviewId, in: path, required: true, schema: { type: string } }
+    UserId: { name: userId, in: path, required: true, schema: { type: string } }
+    ActivityId: { name: activityId, in: path, required: true, schema: { type: string } }
+    Cursor: { name: cursor, in: query, required: false, schema: { type: string, minLength: 1 } }
+    Limit: { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+
+  responses:
+    ValidationError:
+      description: "`VALIDATION_ERROR` — corpo/querystring reprovado pelo schema `zod`."
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    Unauthenticated:
+      description: "`UNAUTHENTICATED` (sem Bearer válido) ou `INVALID_ACCESS_TOKEN` (expirado/malformado/conta inexistente)."
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    ActivityNotFound:
+      description: >
+        `ACTIVITY_NOT_FOUND` — `activityId` não existe, ou existe mas o usuário
+        autenticado não é o dono nem segue aprovado o dono (as duas respostas são
+        idênticas — perfil privado).
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    UnsupportedActivityInteraction:
+      description: "`UNSUPPORTED_ACTIVITY_INTERACTION` — o item alvo é do tipo `started_reading` (sem comentário/curtida)."
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, statusCode]
+          properties:
+            code: { type: string, pattern: "^[A-Z][A-Z0-9_]*$" }
+            message: { type: string }
+            statusCode: { type: integer, minimum: 400, maximum: 599 }
+            details:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [path, message]
+                properties:
+                  path: { type: string }
+                  message: { type: string }
+
+    # --- auth / profile ---
+    SignupRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, handle, displayName]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 8, maxLength: 72 }
+        handle: { type: string, pattern: "^[A-Za-z0-9_]{3,30}$", description: Aceita caixa mista; normalizado para minúsculo no servidor. }
+        displayName: { type: string, minLength: 1, maxLength: 50 }
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 72 }
+
+    RefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, minLength: 1 }
+
+    LogoutRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, minLength: 1 }
+
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 72 }
+        newPassword: { type: string, minLength: 8, maxLength: 72 }
+        refreshToken:
+          type: string
+          minLength: 1
+          description: >
+            Refresh token da sessão corrente. Se presente e válido para esta conta, essa
+            sessão é preservada; senão todas as sessões da conta são revogadas.
+
+    EditProfileRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 50 }
+        bio: { type: [string, "null"], maxLength: 280 }
+
+    PublicUser:
+      type: object
+      additionalProperties: false
+      required: [id, email, handle, displayName, bio, createdAt]
+      properties:
+        id: { type: string, description: ObjectId hex de 24 chars. }
+        email: { type: string, format: email }
+        handle: { type: string, pattern: "^[a-z0-9_]{3,30}$" }
+        displayName: { type: string }
+        bio: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+
+    Profile:
+      type: object
+      additionalProperties: false
+      required: [id, handle, displayName, bio]
+      properties:
+        id: { type: string }
+        handle: { type: string }
+        displayName: { type: string }
+        bio: { type: [string, "null"] }
+
+    TokenPair:
+      type: object
+      additionalProperties: false
+      required: [accessToken, refreshToken, tokenType, expiresIn]
+      properties:
+        accessToken: { type: string, description: "JWT HS256 (sub, iat, exp)." }
+        refreshToken: { type: string, description: "Token opaco base64url (32 bytes)." }
+        tokenType: { type: string, enum: [Bearer] }
+        expiresIn: { type: integer, enum: [900], description: Vida do access token em segundos (~15 min). }
+
+    # --- users / follows ---
+    UserSearchResult:
+      type: object
+      additionalProperties: false
+      required: [id, handle, displayName, avatarUrl]
+      properties:
+        id: { type: string }
+        handle: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: [string, "null"] }
+
+    UserSearchPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, totalItems]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/UserSearchResult" } }
+        page: { type: integer }
+        limit: { type: integer }
+        totalItems: { type: integer }
+
+    FollowRequestResource:
+      type: object
+      additionalProperties: false
+      required: [requesterId, targetId, createdAt]
+      properties:
+        requesterId: { type: string }
+        targetId: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    FollowRequestItem:
+      type: object
+      additionalProperties: false
+      required: [userId, handle, displayName, direction, createdAt]
+      properties:
+        userId: { type: string, description: "O outro lado do pedido (quem pediu, se `incoming`; quem recebeu, se `outgoing`)." }
+        handle: { type: string }
+        displayName: { type: string }
+        direction: { type: string, enum: [incoming, outgoing] }
+        createdAt: { type: string, format: date-time }
+
+    FollowRequestCursorPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/FollowRequestItem" } }
+        nextCursor: { type: [string, "null"] }
+
+    FollowedUser:
+      type: object
+      additionalProperties: false
+      required: [userId, handle, displayName, createdAt]
+      properties:
+        userId: { type: string }
+        handle: { type: string }
+        displayName: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    FollowCursorPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/FollowedUser" } }
+        nextCursor: { type: [string, "null"] }
+
+    # --- books / reading-sessions ---
+    BookSearchResult:
+      type: object
+      additionalProperties: false
+      required: [olid, isbn13, title, authors, coverUrl, firstPublishYear]
+      properties:
+        olid: { type: string }
+        isbn13: { type: [string, "null"] }
+        title: { type: string }
+        authors: { type: array, items: { type: string } }
+        coverUrl: { type: [string, "null"] }
+        firstPublishYear: { type: [integer, "null"] }
+
+    BookSearchPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, limit, totalItems]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/BookSearchResult" } }
+        page: { type: integer }
+        limit: { type: integer }
+        totalItems: { type: integer }
+
+    BookDetail:
+      allOf:
+        - $ref: "#/components/schemas/BookSearchResult"
+        - type: object
+          additionalProperties: false
+          required: [id, aggregates]
+          properties:
+            id: { type: string }
+            aggregates:
+              type: object
+              additionalProperties: false
+              required: [averageRating, reviewCount, readerCount]
+              properties:
+                averageRating: { type: [number, "null"] }
+                reviewCount: { type: integer }
+                readerCount: { type: integer }
+
+    BookCursorPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/BookSearchResult" } }
+        nextCursor: { type: [string, "null"] }
+
+    MarkFinishedRequest:
+      type: object
+      additionalProperties: false
+      required: [finishedAt]
+      properties:
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+
+    UpdateProgressRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPage]
+      properties:
+        currentPage: { type: integer, minimum: 1 }
+
+    FinishReadingSessionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        finishedAt: { type: string, format: date-time }
+
+    EditReadingSessionRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+        currentPage: { type: integer, minimum: 1 }
+
+    ReadingSession:
+      type: object
+      additionalProperties: false
+      required: [id, bookId, status, startedAt, finishedAt, currentPage, createdAt, review]
+      properties:
+        id: { type: string }
+        bookId: { type: string }
+        status: { type: string, enum: [reading, finished] }
+        startedAt: { type: [string, "null"], format: date-time }
+        finishedAt: { type: [string, "null"], format: date-time }
+        currentPage: { type: [integer, "null"] }
+        createdAt: { type: string, format: date-time }
+        review:
+          description: >
+            Presente em toda resposta desse formato (não só na listagem) — `null` até
+            existir uma review para esta session.
+          oneOf:
+            - { $ref: "#/components/schemas/Review" }
+            - type: "null"
+
+    ReadingSessionCursorPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ReadingSession" } }
+        nextCursor: { type: [string, "null"] }
+
+    # --- reviews ---
+    CreateReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [rating]
+      properties:
+        rating: { type: integer, minimum: 1, maximum: 5, description: Estrela cheia — sem meia-estrela. }
+        text: { type: string, maxLength: 2000 }
+        containsSpoiler: { type: boolean, default: false }
+
+    EditReviewRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        text: { type: [string, "null"], maxLength: 2000 }
+        containsSpoiler: { type: boolean }
+
+    Review:
+      type: object
+      additionalProperties: false
+      required: [id, sessionId, rating, text, containsSpoiler, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        sessionId: { type: string }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        text: { type: [string, "null"], maxLength: 2000, description: "O texto completo sempre vem — `containsSpoiler` é só uma flag; ocultar é responsabilidade do cliente." }
+        containsSpoiler: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    # --- feed ---
+    FeedActor:
+      type: object
+      additionalProperties: false
+      required: [userId, handle, displayName]
+      properties:
+        userId: { type: string }
+        handle: { type: string }
+        displayName: { type: string }
+
+    FeedBook:
+      type: object
+      additionalProperties: false
+      required: [id, title, authors, coverUrl]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        authors: { type: array, items: { type: string } }
+        coverUrl: { type: [string, "null"] }
+
+    FeedItem:
+      type: object
+      additionalProperties: false
+      required: [id, type, createdAt, actor, book, readingSessionId, currentPage, review, reactionsCount, hasReacted]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [started_reading, finished_reading, review_published, progress_update] }
+        createdAt: { type: string, format: date-time }
+        actor: { $ref: "#/components/schemas/FeedActor" }
+        book: { $ref: "#/components/schemas/FeedBook" }
+        readingSessionId: { type: string }
+        currentPage: { type: [integer, "null"], description: "Preenchido só quando `type === 'progress_update'`." }
+        review:
+          description: "Preenchido (estado atual, ao vivo) só quando `type === 'review_published'`."
+          oneOf:
+            - { $ref: "#/components/schemas/Review" }
+            - type: "null"
+        reactionsCount: { type: integer, minimum: 0 }
+        hasReacted: { type: boolean, description: Se o usuário autenticado (viewer) já curtiu este item. }
+
+    FeedCursorPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/FeedItem" } }
+        nextCursor: { type: [string, "null"] }
+
+    # --- comments ---
+    CreateCommentInput:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1 }
+        parentCommentId: { type: string, minLength: 1, description: Omitido/nulo para um comentário de nível 1 (top-level). }
+
+    Comment:
+      type: object
+      additionalProperties: false
+      required: [id, activityId, authorId, text, parentCommentId, deleted, createdAt]
+      properties:
+        id: { type: string }
+        activityId: { type: string }
+        authorId: { type: string }
+        text: { type: string, description: '"[removido]" quando `deleted === true` — nunca o texto original apagado.' }
+        parentCommentId: { type: [string, "null"] }
+        deleted: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    CommentCursorPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Comment" } }
+        nextCursor: { type: [string, "null"] }
+
+    # --- notifications ---
+    Notification:
+      type: object
+      additionalProperties: false
+      required: [id, type, actorId, activityId, commentId, read, createdAt]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [follow_request, follow_approved, comment_on_content, comment_reply, reaction_on_content] }
+        actorId: { type: string }
+        activityId: { type: [string, "null"] }
+        commentId: { type: [string, "null"] }
+        read: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    NotificationCursorPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Notification" } }
+        nextCursor: { type: [string, "null"] }
+
+    UnreadNotificationCount:
+      type: object
+      additionalProperties: false
+      required: [count]
+      properties:
+        count: { type: integer, minimum: 0 }
+
+    # --- health ---
+    HealthStatus:
+      type: object
+      additionalProperties: false
+      required: [status, db, uptime]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        db: { type: string, enum: [up, down] }
+        uptime: { type: integer, minimum: 0, description: Segundos inteiros desde o start do processo. }
