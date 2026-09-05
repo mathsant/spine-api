@@ -2,6 +2,7 @@ import type { Db } from 'mongodb';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { ReviewNotFoundError } from '../../../../src/errors';
+import { MongoActivityRepository } from '../../../../src/repositories/activities';
 import { MongoReviewRepository } from '../../../../src/repositories/reviews';
 import { makeDeleteReview } from '../../../../src/services/reviews';
 import { ensureReviewIndexes } from '../../../helpers/review-indexes';
@@ -16,6 +17,7 @@ describe('delete-review service (integration)', () => {
   let mongo: MongoMemory;
   let db: Db;
   let reviewRepository: MongoReviewRepository;
+  let activityRepository: MongoActivityRepository;
   let deleteReview: ReturnType<typeof makeDeleteReview>;
 
   beforeAll(async () => {
@@ -29,9 +31,10 @@ describe('delete-review service (integration)', () => {
   });
 
   beforeEach(async () => {
-    await db.collection('reviews').deleteMany({});
+    await Promise.all(['reviews', 'activities'].map((c) => db.collection(c).deleteMany({})));
     reviewRepository = new MongoReviewRepository(db);
-    deleteReview = makeDeleteReview({ reviewRepository });
+    activityRepository = new MongoActivityRepository(db);
+    deleteReview = makeDeleteReview({ reviewRepository, activityRepository });
   });
 
   it('deletes a review owned by the user', async () => {
@@ -54,5 +57,22 @@ describe('delete-review service (integration)', () => {
       ReviewNotFoundError,
     );
     expect(await reviewRepository.findById(review.id)).not.toBeNull();
+  });
+
+  it('removes only the review_published activity of the session, keeping other event types (006, D4)', async () => {
+    const review = await reviewRepository.create(userId, sessionId, bookId, { rating: 4 });
+    await activityRepository.record(
+      { type: 'started_reading', actorId: userId, bookId, readingSessionId: sessionId },
+      new Date(),
+    );
+    await activityRepository.record(
+      { type: 'review_published', actorId: userId, bookId, readingSessionId: sessionId },
+      new Date(),
+    );
+
+    await deleteReview({ userId, reviewId: review.id });
+
+    const page = await activityRepository.listForActors([userId], null, 20);
+    expect(page.items.map((item) => item.type)).toEqual(['started_reading']);
   });
 });

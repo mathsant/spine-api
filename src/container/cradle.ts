@@ -1,6 +1,7 @@
 import type { AppConfig } from '../config';
 import type { Db, MongoClient } from '../db';
 import type { OpenLibraryClient } from '../integrations/open-library';
+import type { ActivityRepository } from '../repositories/activities';
 import type { AuthSessionRepository } from '../repositories/auth-sessions';
 import type { BookRepository } from '../repositories/books';
 import type { FollowRequestRepository } from '../repositories/follow-requests';
@@ -19,6 +20,7 @@ import type {
   Signup,
 } from '../services/auth';
 import type { GetBook, ListWantToRead, MarkWantToRead, SearchBooks, UnmarkWantToRead } from '../services/books';
+import type { GetFeed } from '../services/feed';
 import type { GetHealth } from '../services/health';
 import type { EditProfile } from '../services/profile';
 import type {
@@ -68,6 +70,7 @@ export interface AppCradle {
   followRequestRepository: FollowRequestRepository;
   followRepository: FollowRepository;
   reviewRepository: ReviewRepository;
+  activityRepository: ActivityRepository;
   getHealthService: GetHealth;
   authenticateService: Authenticate;
   signupService: Signup;
@@ -101,4 +104,5 @@ export interface AppCradle {
   createReviewService: CreateReview;
   editReviewService: EditReview;
   deleteReviewService: DeleteReview;
+  getFeedService: GetFeed;
 }

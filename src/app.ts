@@ -8,6 +8,7 @@ import type { AppConfig } from './config';
 import { registerContainer } from './container';
 import { authRoutes } from './controllers/auth';
 import { booksRoutes } from './controllers/books';
+import { feedRoutes } from './controllers/feed';
 import { followsRoutes } from './controllers/follows';
 import { healthRoutes } from './controllers/health';
 import { profileRoutes } from './controllers/profile';
@@ -88,6 +89,7 @@ export async function buildApp(
   await app.register(profileRoutes, { prefix: '/v1' });
   await app.register(usersRoutes, { prefix: '/v1' });
   await app.register(followsRoutes, { prefix: '/v1' });
+  await app.register(feedRoutes, { prefix: '/v1' });
   await app.ready();
 
   return app;

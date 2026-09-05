@@ -2,6 +2,7 @@ import type { Db } from 'mongodb';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { ReadingSessionNotFinishedError, ReadingSessionNotFoundError, ReviewAlreadyExistsError } from '../../../../src/errors';
+import { MongoActivityRepository } from '../../../../src/repositories/activities';
 import { MongoReadingSessionRepository } from '../../../../src/repositories/reading-sessions';
 import { MongoReviewRepository } from '../../../../src/repositories/reviews';
 import { makeCreateReview } from '../../../../src/services/reviews';
@@ -18,6 +19,7 @@ describe('create-review service (integration)', () => {
   let db: Db;
   let readingSessionRepository: MongoReadingSessionRepository;
   let reviewRepository: MongoReviewRepository;
+  let activityRepository: MongoActivityRepository;
   let createReview: ReturnType<typeof makeCreateReview>;
 
   beforeAll(async () => {
@@ -32,11 +34,18 @@ describe('create-review service (integration)', () => {
   });
 
   beforeEach(async () => {
-    await db.collection('reading_sessions').deleteMany({});
-    await db.collection('reviews').deleteMany({});
+    await Promise.all(
+      ['reading_sessions', 'reviews', 'activities'].map((c) => db.collection(c).deleteMany({})),
+    );
     readingSessionRepository = new MongoReadingSessionRepository(db);
     reviewRepository = new MongoReviewRepository(db);
-    createReview = makeCreateReview({ reviewRepository, readingSessionRepository });
+    activityRepository = new MongoActivityRepository(db);
+    createReview = makeCreateReview({
+      reviewRepository,
+      readingSessionRepository,
+      activityRepository,
+      clock: { now: () => new Date('2025-06-01T00:00:00.000Z') },
+    });
   });
 
   it('creates a review for a finished session owned by the user', async () => {
@@ -93,5 +102,19 @@ describe('create-review service (integration)', () => {
     await expect(
       createReview({ userId, sessionId: session.id, rating: 4 }),
     ).rejects.toBeInstanceOf(ReadingSessionNotFoundError);
+  });
+
+  it('records a review_published activity (RF-003)', async () => {
+    const session = await readingSessionRepository.createFinished(userId, bookId, {
+      startedAt: null,
+      finishedAt: new Date(),
+    });
+
+    await createReview({ userId, sessionId: session.id, rating: 4 });
+
+    const page = await activityRepository.listForActors([userId], null, 20);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].type).toBe('review_published');
+    expect(page.items[0].readingSessionId).toBe(session.id);
   });
 });

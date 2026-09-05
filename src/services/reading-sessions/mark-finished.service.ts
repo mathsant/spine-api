@@ -1,4 +1,6 @@
+import type { Clock } from '../../container/cradle';
 import type { OpenLibraryClient } from '../../integrations/open-library';
+import type { ActivityRepository } from '../../repositories/activities';
 import type { BookRepository } from '../../repositories/books';
 import type { ReadingSessionRepository } from '../../repositories/reading-sessions';
 import type { ShelfMembershipRepository } from '../../repositories/shelf-memberships';
@@ -20,6 +22,8 @@ export interface MarkFinishedDeps {
   openLibraryClient: OpenLibraryClient;
   readingSessionRepository: ReadingSessionRepository;
   shelfMembershipRepository: ShelfMembershipRepository;
+  activityRepository: ActivityRepository;
+  clock: Clock;
 }
 
 /**
@@ -29,7 +33,14 @@ export interface MarkFinishedDeps {
  * best-effort — plan.md D7).
  */
 export const makeMarkFinished =
-  ({ bookRepository, openLibraryClient, readingSessionRepository, shelfMembershipRepository }: MarkFinishedDeps): MarkFinished =>
+  ({
+    bookRepository,
+    openLibraryClient,
+    readingSessionRepository,
+    shelfMembershipRepository,
+    activityRepository,
+    clock,
+  }: MarkFinishedDeps): MarkFinished =>
   async ({ userId, olid, startedAt, finishedAt }) => {
     const book = await resolveBook({ bookRepository, openLibraryClient }, olid);
 
@@ -38,6 +49,10 @@ export const makeMarkFinished =
       finishedAt,
     });
     await shelfMembershipRepository.remove(userId, book.id);
+    await activityRepository.record(
+      { type: 'finished_reading', actorId: userId, bookId: book.id, readingSessionId: record.id },
+      clock.now(),
+    );
 
     return toReadingSessionDTO(record);
   };

@@ -65,4 +65,14 @@ describe('MongoFollowRepository (integration)', () => {
     expect(following.items).toHaveLength(1);
     expect(following.items[0].followeeId).toBe(followeeId);
   });
+
+  it('listFolloweeIds returns all followee ids, unpaginated, [] if none', async () => {
+    expect(await repo.listFolloweeIds(followerId)).toEqual([]);
+
+    await repo.create(followerId, followeeId, new Date());
+    await repo.create(followerId, otherId, new Date());
+
+    const ids = await repo.listFolloweeIds(followerId);
+    expect(ids.sort()).toEqual([followeeId, otherId].sort());
+  });
 });

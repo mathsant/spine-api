@@ -1,4 +1,6 @@
+import type { Clock } from '../../container/cradle';
 import { ReadingSessionNotFinishedError, ReadingSessionNotFoundError, ReviewAlreadyExistsError } from '../../errors';
+import type { ActivityRepository } from '../../repositories/activities';
 import type { ReadingSessionRepository } from '../../repositories/reading-sessions';
 import type { ReviewRepository } from '../../repositories/reviews';
 import { toReviewDTO } from './to-dto';
@@ -17,11 +19,13 @@ export type CreateReview = (input: CreateReviewInput) => Promise<ReviewDTO>;
 export interface CreateReviewDeps {
   reviewRepository: ReviewRepository;
   readingSessionRepository: ReadingSessionRepository;
+  activityRepository: ActivityRepository;
+  clock: Clock;
 }
 
 /** Creates a review for a finished reading session owned by the user (RF-001). */
 export const makeCreateReview =
-  ({ reviewRepository, readingSessionRepository }: CreateReviewDeps): CreateReview =>
+  ({ reviewRepository, readingSessionRepository, activityRepository, clock }: CreateReviewDeps): CreateReview =>
   async ({ userId, sessionId, rating, text, containsSpoiler }) => {
     const session = await readingSessionRepository.findById(sessionId);
     if (!session || session.userId !== userId) {
@@ -41,5 +45,10 @@ export const makeCreateReview =
       text,
       containsSpoiler,
     });
+    await activityRepository.record(
+      { type: 'review_published', actorId: userId, bookId: session.bookId, readingSessionId: sessionId },
+      clock.now(),
+    );
+
     return toReviewDTO(record);
   };

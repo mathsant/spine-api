@@ -2,6 +2,7 @@ import type { Db } from 'mongodb';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { ReadingSessionNotFoundError } from '../../../../src/errors';
+import { MongoActivityRepository } from '../../../../src/repositories/activities';
 import { MongoReadingSessionRepository } from '../../../../src/repositories/reading-sessions';
 import { makeFinishReadingSession } from '../../../../src/services/reading-sessions';
 import { ensureBookIndexes } from '../../../helpers/book-indexes';
@@ -15,6 +16,7 @@ describe('finish-reading-session service (integration)', () => {
   let mongo: MongoMemory;
   let db: Db;
   let readingSessionRepository: MongoReadingSessionRepository;
+  let activityRepository: MongoActivityRepository;
   let finishReadingSession: ReturnType<typeof makeFinishReadingSession>;
 
   beforeAll(async () => {
@@ -28,10 +30,12 @@ describe('finish-reading-session service (integration)', () => {
   });
 
   beforeEach(async () => {
-    await db.collection('reading_sessions').deleteMany({});
+    await Promise.all(['reading_sessions', 'activities'].map((c) => db.collection(c).deleteMany({})));
     readingSessionRepository = new MongoReadingSessionRepository(db);
+    activityRepository = new MongoActivityRepository(db);
     finishReadingSession = makeFinishReadingSession({
       readingSessionRepository,
+      activityRepository,
       clock: { now: () => new Date('2025-06-01T00:00:00.000Z') },
     });
   });
@@ -71,5 +75,16 @@ describe('finish-reading-session service (integration)', () => {
     await expect(
       finishReadingSession({ userId, sessionId: session.id }),
     ).rejects.toBeInstanceOf(ReadingSessionNotFoundError);
+  });
+
+  it('records a finished_reading activity, but does not duplicate it on an idempotent second finish (RF-002)', async () => {
+    const session = await readingSessionRepository.startReading(userId, bookId, new Date());
+
+    await finishReadingSession({ userId, sessionId: session.id, finishedAt: new Date('2025-01-01T00:00:00.000Z') });
+    await finishReadingSession({ userId, sessionId: session.id, finishedAt: new Date('2025-02-01T00:00:00.000Z') });
+
+    const page = await activityRepository.listForActors([userId], null, 20);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].type).toBe('finished_reading');
   });
 });

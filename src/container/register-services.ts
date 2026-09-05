@@ -39,6 +39,7 @@ import {
   makeUpdateProgress,
 } from '../services/reading-sessions';
 import { makeCreateReview, makeDeleteReview, makeEditReview } from '../services/reviews';
+import { makeGetFeed } from '../services/feed';
 import type { AppCradle } from './cradle';
 
 export function registerServices(container: AwilixContainer<AppCradle>): void {
@@ -164,6 +165,7 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
         openLibraryClient: cradle.openLibraryClient,
         readingSessionRepository: cradle.readingSessionRepository,
         shelfMembershipRepository: cradle.shelfMembershipRepository,
+        activityRepository: cradle.activityRepository,
         clock: cradle.clock,
       }),
     ).singleton(),
@@ -173,14 +175,21 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
         openLibraryClient: cradle.openLibraryClient,
         readingSessionRepository: cradle.readingSessionRepository,
         shelfMembershipRepository: cradle.shelfMembershipRepository,
+        activityRepository: cradle.activityRepository,
+        clock: cradle.clock,
       }),
     ).singleton(),
     updateProgressService: asFunction((cradle: AppCradle) =>
-      makeUpdateProgress({ readingSessionRepository: cradle.readingSessionRepository }),
+      makeUpdateProgress({
+        readingSessionRepository: cradle.readingSessionRepository,
+        activityRepository: cradle.activityRepository,
+        clock: cradle.clock,
+      }),
     ).singleton(),
     finishReadingSessionService: asFunction((cradle: AppCradle) =>
       makeFinishReadingSession({
         readingSessionRepository: cradle.readingSessionRepository,
+        activityRepository: cradle.activityRepository,
         clock: cradle.clock,
       }),
     ).singleton(),
@@ -191,6 +200,7 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
       makeDeleteReadingSession({
         readingSessionRepository: cradle.readingSessionRepository,
         reviewRepository: cradle.reviewRepository,
+        activityRepository: cradle.activityRepository,
       }),
     ).singleton(),
     listReadingSessionsService: asFunction((cradle: AppCradle) =>
@@ -203,13 +213,27 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
       makeCreateReview({
         reviewRepository: cradle.reviewRepository,
         readingSessionRepository: cradle.readingSessionRepository,
+        activityRepository: cradle.activityRepository,
+        clock: cradle.clock,
       }),
     ).singleton(),
     editReviewService: asFunction((cradle: AppCradle) =>
       makeEditReview({ reviewRepository: cradle.reviewRepository }),
     ).singleton(),
     deleteReviewService: asFunction((cradle: AppCradle) =>
-      makeDeleteReview({ reviewRepository: cradle.reviewRepository }),
+      makeDeleteReview({
+        reviewRepository: cradle.reviewRepository,
+        activityRepository: cradle.activityRepository,
+      }),
+    ).singleton(),
+    getFeedService: asFunction((cradle: AppCradle) =>
+      makeGetFeed({
+        activityRepository: cradle.activityRepository,
+        followRepository: cradle.followRepository,
+        userRepository: cradle.userRepository,
+        bookRepository: cradle.bookRepository,
+        reviewRepository: cradle.reviewRepository,
+      }),
     ).singleton(),
   });
 }
