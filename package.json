@@ -20,6 +20,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "docs:lint": "redocly lint docs/openapi.yaml",
+    "seed:e2e-user": "tsx scripts/seed-e2e-user.ts",
     "migrate:up": "migrate-mongo up",
     "migrate:down": "migrate-mongo down",
     "migrate:create": "migrate-mongo create"
