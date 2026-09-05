@@ -4,8 +4,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ActivityNotFoundError, UnsupportedActivityInteractionError } from '../../../../src/errors';
 import { MongoActivityRepository } from '../../../../src/repositories/activities';
 import { MongoFollowRepository } from '../../../../src/repositories/follows';
+import { MongoNotificationRepository } from '../../../../src/repositories/notifications';
 import { MongoReactionRepository } from '../../../../src/repositories/reactions';
 import { makeResolveVisibleActivity } from '../../../../src/services/activities';
+import { makeCreateNotification } from '../../../../src/services/notifications';
 import { makeCreateReaction } from '../../../../src/services/reactions';
 import { type MongoMemory, startMongoMemory } from '../../../helpers/mongo-memory';
 
@@ -21,6 +23,7 @@ describe('create-reaction service (integration)', () => {
   let activityRepository: MongoActivityRepository;
   let followRepository: MongoFollowRepository;
   let reactionRepository: MongoReactionRepository;
+  let notificationRepository: MongoNotificationRepository;
   let createReaction: ReturnType<typeof makeCreateReaction>;
 
   beforeAll(async () => {
@@ -33,12 +36,20 @@ describe('create-reaction service (integration)', () => {
   });
 
   beforeEach(async () => {
-    await Promise.all(['activities', 'follows', 'reactions'].map((c) => db.collection(c).deleteMany({})));
+    await Promise.all(
+      ['activities', 'follows', 'reactions', 'notifications'].map((c) => db.collection(c).deleteMany({})),
+    );
     activityRepository = new MongoActivityRepository(db);
     followRepository = new MongoFollowRepository(db);
     reactionRepository = new MongoReactionRepository(db);
+    notificationRepository = new MongoNotificationRepository(db);
     const resolveVisibleActivity = makeResolveVisibleActivity({ activityRepository, followRepository });
-    createReaction = makeCreateReaction({ reactionRepository, resolveVisibleActivity, clock: { now: () => new Date() } });
+    createReaction = makeCreateReaction({
+      reactionRepository,
+      resolveVisibleActivity,
+      createNotification: makeCreateNotification({ notificationRepository, clock: { now: () => new Date() } }),
+      clock: { now: () => new Date() },
+    });
   });
 
   it('reacts to a followed user\'s item (scenario 1, RF-001)', async () => {
@@ -100,5 +111,30 @@ describe('create-reaction service (integration)', () => {
     await expect(
       createReaction({ userId: owner, activityId: activity.id }),
     ).rejects.toBeInstanceOf(UnsupportedActivityInteractionError);
+  });
+
+  it('notifies the item owner of a new reaction (008 scenario 8, RF-008)', async () => {
+    const activity = await activityRepository.record(
+      { type: 'progress_update', actorId: owner, bookId, readingSessionId: sessionId, currentPage: 10 },
+      new Date(),
+    );
+    await followRepository.create(follower, owner, new Date());
+
+    await createReaction({ userId: follower, activityId: activity.id });
+
+    expect(await notificationRepository.countUnread(owner)).toBe(1);
+  });
+
+  it('does not duplicate the notification on a repeated idempotent reaction (008, D1)', async () => {
+    const activity = await activityRepository.record(
+      { type: 'progress_update', actorId: owner, bookId, readingSessionId: sessionId, currentPage: 10 },
+      new Date(),
+    );
+    await followRepository.create(follower, owner, new Date());
+
+    await createReaction({ userId: follower, activityId: activity.id });
+    await createReaction({ userId: follower, activityId: activity.id });
+
+    expect(await notificationRepository.countUnread(owner)).toBe(1);
   });
 });

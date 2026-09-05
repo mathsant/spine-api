@@ -8,6 +8,7 @@ import type { CommentRepository } from '../repositories/comments';
 import type { FollowRequestRepository } from '../repositories/follow-requests';
 import type { FollowRepository } from '../repositories/follows';
 import type { HealthRepository } from '../repositories/health';
+import type { NotificationRepository } from '../repositories/notifications';
 import type { ReactionRepository } from '../repositories/reactions';
 import type { ReadingSessionRepository } from '../repositories/reading-sessions';
 import type { ReviewRepository } from '../repositories/reviews';
@@ -26,6 +27,13 @@ import type { ResolveVisibleActivity } from '../services/activities';
 import type { CreateComment, DeleteComment, ListComments } from '../services/comments';
 import type { GetFeed } from '../services/feed';
 import type { GetHealth } from '../services/health';
+import type {
+  CreateNotification,
+  GetUnreadNotificationCount,
+  ListNotifications,
+  MarkAllNotificationsRead,
+  MarkNotificationRead,
+} from '../services/notifications';
 import type { EditProfile } from '../services/profile';
 import type {
   DeleteReadingSession,
@@ -78,6 +86,7 @@ export interface AppCradle {
   activityRepository: ActivityRepository;
   commentRepository: CommentRepository;
   reactionRepository: ReactionRepository;
+  notificationRepository: NotificationRepository;
   getHealthService: GetHealth;
   resolveVisibleActivityService: ResolveVisibleActivity;
   authenticateService: Authenticate;
@@ -118,4 +127,9 @@ export interface AppCradle {
   createCommentService: CreateComment;
   listCommentsService: ListComments;
   deleteCommentService: DeleteComment;
+  createNotificationService: CreateNotification;
+  listNotificationsService: ListNotifications;
+  getUnreadNotificationCountService: GetUnreadNotificationCount;
+  markNotificationReadService: MarkNotificationRead;
+  markAllNotificationsReadService: MarkAllNotificationsRead;
 }

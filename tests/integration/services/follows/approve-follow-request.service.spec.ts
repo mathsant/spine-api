@@ -4,7 +4,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { FollowRequestNotFoundError } from '../../../../src/errors';
 import { MongoFollowRequestRepository } from '../../../../src/repositories/follow-requests';
 import { MongoFollowRepository } from '../../../../src/repositories/follows';
+import { MongoNotificationRepository } from '../../../../src/repositories/notifications';
 import { makeApproveFollowRequest } from '../../../../src/services/follows';
+import { makeCreateNotification } from '../../../../src/services/notifications';
 import { ensureFollowIndexes } from '../../../helpers/follow-indexes';
 import { type MongoMemory, startMongoMemory } from '../../../helpers/mongo-memory';
 
@@ -15,6 +17,7 @@ describe('approve-follow-request service (integration)', () => {
   let db: Db;
   let followRequestRepository: MongoFollowRequestRepository;
   let followRepository: MongoFollowRepository;
+  let notificationRepository: MongoNotificationRepository;
   let approveFollowRequest: ReturnType<typeof makeApproveFollowRequest>;
 
   const requesterId = '507f1f77bcf86cd799439011';
@@ -31,10 +34,19 @@ describe('approve-follow-request service (integration)', () => {
   });
 
   beforeEach(async () => {
-    await Promise.all(['follow_requests', 'follows'].map((c) => db.collection(c).deleteMany({})));
+    await Promise.all(
+      ['follow_requests', 'follows', 'notifications'].map((c) => db.collection(c).deleteMany({})),
+    );
     followRequestRepository = new MongoFollowRequestRepository(db);
     followRepository = new MongoFollowRepository(db);
-    approveFollowRequest = makeApproveFollowRequest({ followRequestRepository, followRepository, clock });
+    notificationRepository = new MongoNotificationRepository(db);
+    approveFollowRequest = makeApproveFollowRequest({
+      followRequestRepository,
+      followRepository,
+      notificationRepository,
+      createNotification: makeCreateNotification({ notificationRepository, clock }),
+      clock,
+    });
   });
 
   it('approves a pending request: creates Follow (requester -> target) and deletes the request', async () => {
@@ -57,5 +69,15 @@ describe('approve-follow-request service (integration)', () => {
     await expect(approveFollowRequest({ targetId, requesterId })).rejects.toBeInstanceOf(
       FollowRequestNotFoundError,
     );
+  });
+
+  it('removes the pending follow_request notification and notifies the requester (008 scenario 2, RF-002/RF-004)', async () => {
+    await followRequestRepository.create(requesterId, targetId, new Date());
+    await notificationRepository.create({ recipientId: targetId, actorId: requesterId, type: 'follow_request' }, new Date());
+
+    await approveFollowRequest({ targetId, requesterId });
+
+    expect(await notificationRepository.countUnread(targetId)).toBe(0);
+    expect(await notificationRepository.countUnread(requesterId)).toBe(1);
   });
 });

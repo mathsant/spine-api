@@ -1,6 +1,7 @@
 import { ReadingSessionNotFoundError } from '../../errors';
 import type { ActivityRepository } from '../../repositories/activities';
 import type { CommentRepository } from '../../repositories/comments';
+import type { NotificationRepository } from '../../repositories/notifications';
 import type { ReactionRepository } from '../../repositories/reactions';
 import type { ReadingSessionRepository } from '../../repositories/reading-sessions';
 import type { ReviewRepository } from '../../repositories/reviews';
@@ -18,12 +19,14 @@ export interface DeleteReadingSessionDeps {
   activityRepository: ActivityRepository;
   commentRepository: CommentRepository;
   reactionRepository: ReactionRepository;
+  notificationRepository: NotificationRepository;
 }
 
 /**
  * Deletes a reading session (RF-018). Ownership checked here (D9). Cascades the delete to
  * the session's review, if any (RF-007, 005-reviews), to every activity event logged for it
- * (006, D4 of research.md), and to every comment/reaction of those events (007, RF-013).
+ * (006, D4 of research.md), to every comment/reaction of those events (007, RF-013), and to
+ * every notification tied to them (008, RF-010, D5 of research.md).
  */
 export const makeDeleteReadingSession =
   ({
@@ -32,6 +35,7 @@ export const makeDeleteReadingSession =
     activityRepository,
     commentRepository,
     reactionRepository,
+    notificationRepository,
   }: DeleteReadingSessionDeps): DeleteReadingSession =>
   async ({ userId, sessionId }) => {
     const existing = await readingSessionRepository.findById(sessionId);
@@ -44,4 +48,5 @@ export const makeDeleteReadingSession =
     await activityRepository.deleteBySessionId(sessionId);
     await commentRepository.deleteByReadingSessionId(sessionId);
     await reactionRepository.deleteByReadingSessionId(sessionId);
+    await notificationRepository.deleteByReadingSessionId(sessionId);
   };

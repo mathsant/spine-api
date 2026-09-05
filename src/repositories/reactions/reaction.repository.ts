@@ -12,14 +12,19 @@ export interface ReactionRecord {
 
 /** Data-access port for the `reactions` collection. */
 export interface ReactionRepository {
-  /** Idempotent upsert keyed by `{ activityId, userId }` — repeating never duplicates (RF-002, D4). */
+  /**
+   * Idempotent upsert keyed by `{ activityId, userId }` — repeating never duplicates (RF-002, D4).
+   * Returns `true` when this call actually inserted a new reaction, `false` when one already
+   * existed (008, D1 of research.md) — used by `create-reaction.service.ts` to only notify on a
+   * genuinely new reaction.
+   */
   add(
     activityId: string,
     userId: string,
     readingSessionId: string,
     activityType: ActivityType,
     now: Date,
-  ): Promise<void>;
+  ): Promise<boolean>;
 
   /** `true` if a reaction was actually removed (RF-003 — `ReactionNotFoundError` when `false`). */
   remove(activityId: string, userId: string): Promise<boolean>;

@@ -12,6 +12,7 @@ import { commentsRoutes } from './controllers/comments';
 import { feedRoutes } from './controllers/feed';
 import { followsRoutes } from './controllers/follows';
 import { healthRoutes } from './controllers/health';
+import { notificationsRoutes } from './controllers/notifications';
 import { profileRoutes } from './controllers/profile';
 import { reactionsRoutes } from './controllers/reactions';
 import { readingSessionsRoutes } from './controllers/reading-sessions';
@@ -94,6 +95,7 @@ export async function buildApp(
   await app.register(feedRoutes, { prefix: '/v1' });
   await app.register(reactionsRoutes, { prefix: '/v1' });
   await app.register(commentsRoutes, { prefix: '/v1' });
+  await app.register(notificationsRoutes, { prefix: '/v1' });
   await app.ready();
 
   return app;

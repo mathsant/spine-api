@@ -30,3 +30,4 @@ export { UnsupportedActivityInteractionError } from './unsupported-activity-inte
 export { CommentNotFoundError } from './comment-not-found-error';
 export { CommentNestingTooDeepError } from './comment-nesting-too-deep-error';
 export { ReactionNotFoundError } from './reaction-not-found-error';
+export { NotificationNotFoundError } from './notification-not-found-error';

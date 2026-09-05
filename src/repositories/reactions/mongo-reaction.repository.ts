@@ -25,8 +25,8 @@ export class MongoReactionRepository implements ReactionRepository {
     readingSessionId: string,
     activityType: ActivityType,
     now: Date,
-  ): Promise<void> {
-    await this.reactions.updateOne(
+  ): Promise<boolean> {
+    const result = await this.reactions.updateOne(
       { activityId, userId },
       {
         $setOnInsert: {
@@ -40,6 +40,7 @@ export class MongoReactionRepository implements ReactionRepository {
       },
       { upsert: true },
     );
+    return result.upsertedCount > 0;
   }
 
   async remove(activityId: string, userId: string): Promise<boolean> {
