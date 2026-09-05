@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { fastifyAwilixPlugin } from '@fastify/awilix';
+import fastifyCors from '@fastify/cors';
 import fastifyRateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 
@@ -76,6 +77,18 @@ export async function buildApp(
   registerContainer(app, config);
   registerErrorHandler(app);
   registerAuthentication(app);
+
+  // Dev-only CORS for the Vite front-end (ports 5173/5174). The browser sends a
+  // preflight OPTIONS to `/v1/*` that would otherwise 404; this plugin answers it
+  // and adds the `Access-Control-*` headers. Not registered in production, where
+  // CORS policy is expected to be handled at the edge / reverse proxy.
+  if (config.nodeEnv !== 'production') {
+    await app.register(fastifyCors, {
+      origin: ['http://localhost:5173', 'http://localhost:5174'],
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['content-type', 'authorization'],
+    });
+  }
 
   await app.register(fastifyRateLimit, {
     global: false,
