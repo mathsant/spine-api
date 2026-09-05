@@ -8,10 +8,12 @@ import type { AppConfig } from './config';
 import { registerContainer } from './container';
 import { authRoutes } from './controllers/auth';
 import { booksRoutes } from './controllers/books';
+import { commentsRoutes } from './controllers/comments';
 import { feedRoutes } from './controllers/feed';
 import { followsRoutes } from './controllers/follows';
 import { healthRoutes } from './controllers/health';
 import { profileRoutes } from './controllers/profile';
+import { reactionsRoutes } from './controllers/reactions';
 import { readingSessionsRoutes } from './controllers/reading-sessions';
 import { reviewsRoutes } from './controllers/reviews';
 import { usersRoutes } from './controllers/users';
@@ -90,6 +92,8 @@ export async function buildApp(
   await app.register(usersRoutes, { prefix: '/v1' });
   await app.register(followsRoutes, { prefix: '/v1' });
   await app.register(feedRoutes, { prefix: '/v1' });
+  await app.register(reactionsRoutes, { prefix: '/v1' });
+  await app.register(commentsRoutes, { prefix: '/v1' });
   await app.ready();
 
   return app;

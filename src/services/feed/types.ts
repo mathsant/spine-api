@@ -23,6 +23,8 @@ export interface FeedItemDTO {
   readingSessionId: string;
   currentPage: number | null;
   review: ReviewDTO | null;
+  reactionsCount: number;
+  hasReacted: boolean;
 }
 
 export interface FeedCursorPageDTO {

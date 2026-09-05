@@ -3,9 +3,11 @@ import { asFunction, type AwilixContainer } from 'awilix';
 import { MongoActivityRepository } from '../repositories/activities';
 import { MongoAuthSessionRepository } from '../repositories/auth-sessions';
 import { MongoBookRepository } from '../repositories/books';
+import { MongoCommentRepository } from '../repositories/comments';
 import { MongoFollowRequestRepository } from '../repositories/follow-requests';
 import { MongoFollowRepository } from '../repositories/follows';
 import { MongoHealthRepository } from '../repositories/health';
+import { MongoReactionRepository } from '../repositories/reactions';
 import { MongoReadingSessionRepository } from '../repositories/reading-sessions';
 import { MongoReviewRepository } from '../repositories/reviews';
 import { MongoShelfMembershipRepository } from '../repositories/shelf-memberships';
@@ -43,6 +45,12 @@ export function registerRepositories(container: AwilixContainer<AppCradle>): voi
     ).singleton(),
     activityRepository: asFunction(
       (cradle: AppCradle) => new MongoActivityRepository(cradle.db),
+    ).singleton(),
+    commentRepository: asFunction(
+      (cradle: AppCradle) => new MongoCommentRepository(cradle.db),
+    ).singleton(),
+    reactionRepository: asFunction(
+      (cradle: AppCradle) => new MongoReactionRepository(cradle.db),
     ).singleton(),
   });
 }

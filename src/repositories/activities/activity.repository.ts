@@ -27,6 +27,9 @@ export interface ActivityRepository {
   /** Inserts one event; `now` comes from the caller service's injected `Clock`. */
   record(input: RecordActivityInput, now: Date): Promise<ActivityRecord>;
 
+  /** Resolves a comment/reaction target (007, D1 of research.md). */
+  findById(activityId: string): Promise<ActivityRecord | null>;
+
   /** Cursor page ordered by `createdAt` desc, filtered by `actorId: { $in: actorIds }` (feed fan-out on read). */
   listForActors(actorIds: string[], cursor: string | null, limit: number): Promise<CursorPage<ActivityRecord>>;
 

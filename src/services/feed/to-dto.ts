@@ -10,6 +10,8 @@ export function toFeedItemDTO(
   actor: UserRecord | undefined,
   book: BookRecord | undefined,
   review: ReviewRecord | null,
+  reactionsCount: number,
+  hasReacted: boolean,
 ): FeedItemDTO {
   return {
     id: activity.id,
@@ -29,5 +31,7 @@ export function toFeedItemDTO(
     readingSessionId: activity.readingSessionId,
     currentPage: activity.type === 'progress_update' ? activity.currentPage : null,
     review: activity.type === 'review_published' && review ? toReviewDTO(review) : null,
+    reactionsCount,
+    hasReacted,
   };
 }

@@ -1,0 +1,192 @@
+openapi: 3.1.0
+info:
+  title: better-books — interactions (comments & reactions)
+  version: 0.1.0
+  description: >
+    Contrato dos 5 endpoints novos entregues pela feature 007-interactions. Referência:
+    spec RF-001..RF-015. Sob o prefixo /v1 e exige `Authorization: Bearer <accessToken>`.
+    Alvo sempre um item de feed (`activityId`), dos tipos `review_published`, `progress_update`
+    ou `finished_reading` — `started_reading` responde 422 (RF-011).
+
+servers:
+  - url: /v1
+
+security:
+  - bearerAuth: []
+
+paths:
+  /activities/{activityId}/reactions:
+    post:
+      operationId: createReaction
+      summary: Curtir um item de feed (idempotente — RF-001, RF-002, RF-014).
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      responses:
+        "204": { description: Curtido (ou já estava curtido — idempotente). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/ActivityNotFound" }
+        "422": { $ref: "#/components/responses/UnsupportedActivityInteraction" }
+    delete:
+      operationId: deleteReaction
+      summary: Descurtir um item de feed (RF-003).
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      responses:
+        "204": { description: Curtida removida. }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: Item não existe/não visível, OU o usuário não havia curtido.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "422": { $ref: "#/components/responses/UnsupportedActivityInteraction" }
+
+  /activities/{activityId}/comments:
+    post:
+      operationId: createComment
+      summary: >
+        Comentar num item de feed; opcionalmente como resposta a outro comentário do mesmo
+        item, aninhamento de no máximo 1 nível (RF-005 a RF-007, RF-010, RF-014).
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCommentInput" }
+      responses:
+        "201":
+          description: Comentário criado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Comment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: Item não existe/não visível, OU `parentCommentId` não existe/não é desse item.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "422":
+          description: Alvo é `started_reading`, OU `parentCommentId` aponta para uma resposta (nível 2+).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    get:
+      operationId: listComments
+      summary: Lista os comentários de um item, ordem cronológica ascendente, paginado por cursor (RF-008).
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string, minLength: 1 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Página de comentários (possivelmente vazia).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommentCursorPage" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/ActivityNotFound" }
+        "422": { $ref: "#/components/responses/UnsupportedActivityInteraction" }
+
+  /comments/{commentId}:
+    delete:
+      operationId: deleteComment
+      summary: Apaga (soft delete) um comentário próprio; substituído por placeholder na leitura (RF-009).
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Comentário apagado (soft delete). }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: Comentário não existe, ou não pertence ao usuário autenticado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+components:
+  parameters:
+    ActivityId:
+      name: activityId
+      in: path
+      required: true
+      schema: { type: string }
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    ValidationError:
+      description: Corpo/querystring inválido (`text` vazio, `cursor` malformado, `limit` fora do intervalo).
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    Unauthenticated:
+      description: Token de acesso ausente ou inválido.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    ActivityNotFound:
+      description: >
+        `activityId` não existe, ou existe mas o usuário autenticado não é o dono nem segue
+        aprovado o dono (a API não distingue os dois casos — P6).
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    UnsupportedActivityInteraction:
+      description: O item alvo é do tipo `started_reading` — fora do escopo desta feature.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, statusCode]
+          properties:
+            code: { type: string, pattern: "^[A-Z][A-Z0-9_]*$" }
+            message: { type: string }
+            statusCode: { type: integer }
+            details: {}
+
+    CreateCommentInput:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1 }
+        parentCommentId:
+          type: string
+          minLength: 1
+          description: Omitido/nulo para um comentário de nível 1 (top-level).
+
+    Comment:
+      type: object
+      required: [id, activityId, authorId, text, parentCommentId, deleted, createdAt]
+      properties:
+        id: { type: string }
+        activityId: { type: string }
+        authorId: { type: string }
+        text:
+          type: string
+          description: '"[removido]" quando `deleted === true` — nunca o texto original apagado.'
+        parentCommentId: { type: [string, "null"] }
+        deleted: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    CommentCursorPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Comment" }
+        nextCursor: { type: [string, "null"] }
