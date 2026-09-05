@@ -1,6 +1,7 @@
 import type { ActivityRepository } from '../../repositories/activities';
 import type { BookRepository } from '../../repositories/books';
 import type { FollowRepository } from '../../repositories/follows';
+import type { ReactionRepository } from '../../repositories/reactions';
 import type { ReviewRepository } from '../../repositories/reviews';
 import type { UserRepository } from '../../repositories/users';
 import { toFeedItemDTO } from './to-dto';
@@ -20,6 +21,7 @@ export interface GetFeedDeps {
   userRepository: UserRepository;
   bookRepository: BookRepository;
   reviewRepository: ReviewRepository;
+  reactionRepository: ReactionRepository;
 }
 
 function unique(values: string[]): string[] {
@@ -32,26 +34,37 @@ function unique(values: string[]): string[] {
  * resolve the review's current content live (RF-009) — never a stale snapshot.
  */
 export const makeGetFeed =
-  ({ activityRepository, followRepository, userRepository, bookRepository, reviewRepository }: GetFeedDeps): GetFeed =>
+  ({
+    activityRepository,
+    followRepository,
+    userRepository,
+    bookRepository,
+    reviewRepository,
+    reactionRepository,
+  }: GetFeedDeps): GetFeed =>
   async ({ userId, cursor, limit }) => {
     const followeeIds = await followRepository.listFolloweeIds(userId);
     const page = await activityRepository.listForActors([userId, ...followeeIds], cursor, limit);
 
     const actorIds = unique(page.items.map((item) => item.actorId));
     const bookIds = unique(page.items.map((item) => item.bookId));
+    const activityIds = page.items.map((item) => item.id);
     const reviewSessionIds = page.items
       .filter((item) => item.type === 'review_published')
       .map((item) => item.readingSessionId);
 
-    const [actors, books, reviews] = await Promise.all([
+    const [actors, books, reviews, reactionCounts, reactedActivityIds] = await Promise.all([
       Promise.all(actorIds.map((id) => userRepository.findById(id))),
       Promise.all(bookIds.map((id) => bookRepository.findById(id))),
       reviewRepository.findBySessionIds(reviewSessionIds),
+      reactionRepository.countByActivityIds(activityIds),
+      reactionRepository.listReactedActivityIds(userId, activityIds),
     ]);
 
     const actorById = new Map(actorIds.map((id, index) => [id, actors[index] ?? undefined]));
     const bookById = new Map(bookIds.map((id, index) => [id, books[index] ?? undefined]));
     const reviewBySessionId = new Map(reviews.map((review) => [review.sessionId, review]));
+    const reactedSet = new Set(reactedActivityIds);
 
     return {
       items: page.items.map((activity) =>
@@ -60,6 +73,8 @@ export const makeGetFeed =
           actorById.get(activity.actorId) ?? undefined,
           bookById.get(activity.bookId) ?? undefined,
           reviewBySessionId.get(activity.readingSessionId) ?? null,
+          reactionCounts.get(activity.id) ?? 0,
+          reactedSet.has(activity.id),
         ),
       ),
       nextCursor: page.nextCursor,

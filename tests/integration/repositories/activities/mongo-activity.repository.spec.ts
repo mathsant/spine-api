@@ -119,6 +119,19 @@ describe('MongoActivityRepository (integration)', () => {
     expect(page.items[0].readingSessionId).toBe(otherSessionId);
   });
 
+  it('findById resolves an existing activity and returns null for an unknown id', async () => {
+    const created = await repo.record(
+      { type: 'progress_update', actorId: actorA, bookId, readingSessionId: sessionId, currentPage: 42 },
+      new Date(),
+    );
+
+    const found = await repo.findById(created.id);
+    expect(found).toEqual(created);
+
+    const missing = await repo.findById('507f1f77bcf86cd799439099');
+    expect(missing).toBeNull();
+  });
+
   it('deleteBySessionIdAndType removes only the given type, keeping the others', async () => {
     await repo.record(
       { type: 'started_reading', actorId: actorA, bookId, readingSessionId: sessionId },

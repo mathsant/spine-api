@@ -3,7 +3,7 @@
 /dist
 /coverage
 /.mongodb-binaries
-
+/curls
 /node_modules
 .env
 npm-debug.log*

@@ -53,6 +53,14 @@ export class MongoActivityRepository implements ActivityRepository {
     return toRecord(doc);
   }
 
+  async findById(activityId: string): Promise<ActivityRecord | null> {
+    if (!ObjectId.isValid(activityId)) {
+      return null;
+    }
+    const doc = await this.activities.findOne({ _id: new ObjectId(activityId) });
+    return doc ? toRecord(doc) : null;
+  }
+
   async listForActors(
     actorIds: string[],
     cursor: string | null,

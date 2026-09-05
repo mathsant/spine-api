@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MongoActivityRepository } from '../../../../src/repositories/activities';
 import { MongoBookRepository } from '../../../../src/repositories/books';
 import { MongoFollowRepository } from '../../../../src/repositories/follows';
+import { MongoReactionRepository } from '../../../../src/repositories/reactions';
 import { MongoReviewRepository } from '../../../../src/repositories/reviews';
 import { MongoUserRepository } from '../../../../src/repositories/users';
 import { makeGetFeed } from '../../../../src/services/feed';
@@ -22,6 +23,7 @@ describe('get-feed service (integration)', () => {
   let followRepository: MongoFollowRepository;
   let activityRepository: MongoActivityRepository;
   let reviewRepository: MongoReviewRepository;
+  let reactionRepository: MongoReactionRepository;
   let getFeed: ReturnType<typeof makeGetFeed>;
 
   beforeAll(async () => {
@@ -39,14 +41,24 @@ describe('get-feed service (integration)', () => {
 
   beforeEach(async () => {
     await Promise.all(
-      ['users', 'books', 'follows', 'activities', 'reviews'].map((c) => db.collection(c).deleteMany({})),
+      ['users', 'books', 'follows', 'activities', 'reviews', 'reactions'].map((c) =>
+        db.collection(c).deleteMany({}),
+      ),
     );
     userRepository = new MongoUserRepository(db);
     bookRepository = new MongoBookRepository(db);
     followRepository = new MongoFollowRepository(db);
     activityRepository = new MongoActivityRepository(db);
     reviewRepository = new MongoReviewRepository(db);
-    getFeed = makeGetFeed({ activityRepository, followRepository, userRepository, bookRepository, reviewRepository });
+    reactionRepository = new MongoReactionRepository(db);
+    getFeed = makeGetFeed({
+      activityRepository,
+      followRepository,
+      userRepository,
+      bookRepository,
+      reviewRepository,
+      reactionRepository,
+    });
   });
 
   async function aUser(handle: string) {
@@ -159,5 +171,25 @@ describe('get-feed service (integration)', () => {
     expect(secondPage.items).toHaveLength(1);
     expect(secondPage.items[0].type).toBe('started_reading');
     expect(secondPage.nextCursor).toBeNull();
+  });
+
+  it('exposes reactionsCount and hasReacted per item (007, RF-004)', async () => {
+    const me = await aUser('me');
+    const b = await aUser('b');
+    const book = await bookRepository.upsertByOlid(aSearchResult());
+    await followRepository.create(me.id, b.id, new Date());
+    const activity = await activityRepository.record(
+      { type: 'progress_update', actorId: b.id, bookId: book.id, readingSessionId: 's1', currentPage: 10 },
+      new Date(),
+    );
+
+    const before = await getFeed({ userId: me.id, cursor: null, limit: 20 });
+    expect(before.items[0]).toMatchObject({ reactionsCount: 0, hasReacted: false });
+
+    await reactionRepository.add(activity.id, me.id, 's1', 'progress_update', new Date());
+    await reactionRepository.add(activity.id, b.id, 's1', 'progress_update', new Date());
+
+    const after = await getFeed({ userId: me.id, cursor: null, limit: 20 });
+    expect(after.items[0]).toMatchObject({ reactionsCount: 2, hasReacted: true });
   });
 });

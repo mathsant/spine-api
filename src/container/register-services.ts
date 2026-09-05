@@ -7,6 +7,8 @@ import {
   makeSearchBooks,
   makeUnmarkWantToRead,
 } from '../services/books';
+import { makeResolveVisibleActivity } from '../services/activities';
+import { makeCreateComment, makeDeleteComment, makeListComments } from '../services/comments';
 import { makeGetHealth } from '../services/health';
 import { makeEditProfile } from '../services/profile';
 import { makeSearchUsers } from '../services/users';
@@ -38,6 +40,7 @@ import {
   makeStartReading,
   makeUpdateProgress,
 } from '../services/reading-sessions';
+import { makeCreateReaction, makeDeleteReaction } from '../services/reactions';
 import { makeCreateReview, makeDeleteReview, makeEditReview } from '../services/reviews';
 import { makeGetFeed } from '../services/feed';
 import type { AppCradle } from './cradle';
@@ -46,6 +49,12 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
   container.register({
     getHealthService: asFunction((cradle: AppCradle) =>
       makeGetHealth({ healthRepository: cradle.healthRepository }),
+    ).singleton(),
+    resolveVisibleActivityService: asFunction((cradle: AppCradle) =>
+      makeResolveVisibleActivity({
+        activityRepository: cradle.activityRepository,
+        followRepository: cradle.followRepository,
+      }),
     ).singleton(),
     authenticateService: asFunction((cradle: AppCradle) =>
       makeAuthenticate({ userRepository: cradle.userRepository, config: cradle.config }),
@@ -201,6 +210,8 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
         readingSessionRepository: cradle.readingSessionRepository,
         reviewRepository: cradle.reviewRepository,
         activityRepository: cradle.activityRepository,
+        commentRepository: cradle.commentRepository,
+        reactionRepository: cradle.reactionRepository,
       }),
     ).singleton(),
     listReadingSessionsService: asFunction((cradle: AppCradle) =>
@@ -224,6 +235,37 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
       makeDeleteReview({
         reviewRepository: cradle.reviewRepository,
         activityRepository: cradle.activityRepository,
+        commentRepository: cradle.commentRepository,
+        reactionRepository: cradle.reactionRepository,
+      }),
+    ).singleton(),
+    createCommentService: asFunction((cradle: AppCradle) =>
+      makeCreateComment({
+        commentRepository: cradle.commentRepository,
+        resolveVisibleActivity: cradle.resolveVisibleActivityService,
+        clock: cradle.clock,
+      }),
+    ).singleton(),
+    listCommentsService: asFunction((cradle: AppCradle) =>
+      makeListComments({
+        commentRepository: cradle.commentRepository,
+        resolveVisibleActivity: cradle.resolveVisibleActivityService,
+      }),
+    ).singleton(),
+    deleteCommentService: asFunction((cradle: AppCradle) =>
+      makeDeleteComment({ commentRepository: cradle.commentRepository, clock: cradle.clock }),
+    ).singleton(),
+    createReactionService: asFunction((cradle: AppCradle) =>
+      makeCreateReaction({
+        reactionRepository: cradle.reactionRepository,
+        resolveVisibleActivity: cradle.resolveVisibleActivityService,
+        clock: cradle.clock,
+      }),
+    ).singleton(),
+    deleteReactionService: asFunction((cradle: AppCradle) =>
+      makeDeleteReaction({
+        reactionRepository: cradle.reactionRepository,
+        resolveVisibleActivity: cradle.resolveVisibleActivityService,
       }),
     ).singleton(),
     getFeedService: asFunction((cradle: AppCradle) =>
@@ -233,6 +275,7 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
         userRepository: cradle.userRepository,
         bookRepository: cradle.bookRepository,
         reviewRepository: cradle.reviewRepository,
+        reactionRepository: cradle.reactionRepository,
       }),
     ).singleton(),
   });

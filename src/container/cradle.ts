@@ -4,9 +4,11 @@ import type { OpenLibraryClient } from '../integrations/open-library';
 import type { ActivityRepository } from '../repositories/activities';
 import type { AuthSessionRepository } from '../repositories/auth-sessions';
 import type { BookRepository } from '../repositories/books';
+import type { CommentRepository } from '../repositories/comments';
 import type { FollowRequestRepository } from '../repositories/follow-requests';
 import type { FollowRepository } from '../repositories/follows';
 import type { HealthRepository } from '../repositories/health';
+import type { ReactionRepository } from '../repositories/reactions';
 import type { ReadingSessionRepository } from '../repositories/reading-sessions';
 import type { ReviewRepository } from '../repositories/reviews';
 import type { ShelfMembershipRepository } from '../repositories/shelf-memberships';
@@ -20,6 +22,8 @@ import type {
   Signup,
 } from '../services/auth';
 import type { GetBook, ListWantToRead, MarkWantToRead, SearchBooks, UnmarkWantToRead } from '../services/books';
+import type { ResolveVisibleActivity } from '../services/activities';
+import type { CreateComment, DeleteComment, ListComments } from '../services/comments';
 import type { GetFeed } from '../services/feed';
 import type { GetHealth } from '../services/health';
 import type { EditProfile } from '../services/profile';
@@ -33,6 +37,7 @@ import type {
   UpdateProgress,
 } from '../services/reading-sessions';
 import type { CreateReview, DeleteReview, EditReview } from '../services/reviews';
+import type { CreateReaction, DeleteReaction } from '../services/reactions';
 import type { SearchUsers } from '../services/users';
 import type {
   ApproveFollowRequest,
@@ -71,7 +76,10 @@ export interface AppCradle {
   followRepository: FollowRepository;
   reviewRepository: ReviewRepository;
   activityRepository: ActivityRepository;
+  commentRepository: CommentRepository;
+  reactionRepository: ReactionRepository;
   getHealthService: GetHealth;
+  resolveVisibleActivityService: ResolveVisibleActivity;
   authenticateService: Authenticate;
   signupService: Signup;
   loginService: Login;
@@ -105,4 +113,9 @@ export interface AppCradle {
   editReviewService: EditReview;
   deleteReviewService: DeleteReview;
   getFeedService: GetFeed;
+  createReactionService: CreateReaction;
+  deleteReactionService: DeleteReaction;
+  createCommentService: CreateComment;
+  listCommentsService: ListComments;
+  deleteCommentService: DeleteComment;
 }

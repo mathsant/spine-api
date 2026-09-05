@@ -61,6 +61,7 @@ describe('feed routes (integration)', () => {
         'activities',
         'follows',
         'follow_requests',
+        'reactions',
       ].map((c) => db.collection(c).deleteMany({})),
     );
 
@@ -215,6 +216,36 @@ describe('feed routes (integration)', () => {
 
     const afterSessionDelete = await app.inject({ method: 'GET', url: '/v1/feed', headers: { authorization: authA } });
     expect(afterSessionDelete.json().items).toEqual([]);
+  });
+
+  it('exposes reactionsCount/hasReacted per item, reflecting a reaction from a follower (007, RF-004)', async () => {
+    const app = await build();
+    await followApproved(app, authA, userIdA, authB);
+    const sessionId = await startReading(app, authB);
+    await app.inject({
+      method: 'POST',
+      url: `/v1/reading-sessions/${sessionId}/progress`,
+      headers: { authorization: authB },
+      payload: { currentPage: 10 },
+    });
+
+    const before = await app.inject({ method: 'GET', url: '/v1/feed', headers: { authorization: authA } });
+    const items = before.json().items as Array<{ id: string; type: string; reactionsCount: number; hasReacted: boolean }>;
+    const progressItem = items.find((item) => item.type === 'progress_update');
+    expect(progressItem).toMatchObject({ reactionsCount: 0, hasReacted: false });
+
+    const reacted = await app.inject({
+      method: 'POST',
+      url: `/v1/activities/${progressItem?.id}/reactions`,
+      headers: { authorization: authA },
+    });
+    expect(reacted.statusCode).toBe(204);
+
+    const after = await app.inject({ method: 'GET', url: '/v1/feed', headers: { authorization: authA } });
+    const afterItem = (after.json().items as Array<{ type: string; reactionsCount: number; hasReacted: boolean }>).find(
+      (item) => item.type === 'progress_update',
+    );
+    expect(afterItem).toMatchObject({ reactionsCount: 1, hasReacted: true });
   });
 
   it('GET /feed: 400 VALIDATION_ERROR on a malformed cursor', async () => {

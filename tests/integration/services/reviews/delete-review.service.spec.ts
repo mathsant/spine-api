@@ -3,6 +3,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { ReviewNotFoundError } from '../../../../src/errors';
 import { MongoActivityRepository } from '../../../../src/repositories/activities';
+import { MongoCommentRepository } from '../../../../src/repositories/comments';
+import { MongoReactionRepository } from '../../../../src/repositories/reactions';
 import { MongoReviewRepository } from '../../../../src/repositories/reviews';
 import { makeDeleteReview } from '../../../../src/services/reviews';
 import { ensureReviewIndexes } from '../../../helpers/review-indexes';
@@ -18,6 +20,8 @@ describe('delete-review service (integration)', () => {
   let db: Db;
   let reviewRepository: MongoReviewRepository;
   let activityRepository: MongoActivityRepository;
+  let commentRepository: MongoCommentRepository;
+  let reactionRepository: MongoReactionRepository;
   let deleteReview: ReturnType<typeof makeDeleteReview>;
 
   beforeAll(async () => {
@@ -31,10 +35,14 @@ describe('delete-review service (integration)', () => {
   });
 
   beforeEach(async () => {
-    await Promise.all(['reviews', 'activities'].map((c) => db.collection(c).deleteMany({})));
+    await Promise.all(
+      ['reviews', 'activities', 'comments', 'reactions'].map((c) => db.collection(c).deleteMany({})),
+    );
     reviewRepository = new MongoReviewRepository(db);
     activityRepository = new MongoActivityRepository(db);
-    deleteReview = makeDeleteReview({ reviewRepository, activityRepository });
+    commentRepository = new MongoCommentRepository(db);
+    reactionRepository = new MongoReactionRepository(db);
+    deleteReview = makeDeleteReview({ reviewRepository, activityRepository, commentRepository, reactionRepository });
   });
 
   it('deletes a review owned by the user', async () => {
@@ -74,5 +82,32 @@ describe('delete-review service (integration)', () => {
 
     const page = await activityRepository.listForActors([userId], null, 20);
     expect(page.items.map((item) => item.type)).toEqual(['started_reading']);
+  });
+
+  it('cascades the delete to comments/reactions of the review_published activity only (007, RF-013)', async () => {
+    const review = await reviewRepository.create(userId, sessionId, bookId, { rating: 4 });
+    const started = await activityRepository.record(
+      { type: 'started_reading', actorId: userId, bookId, readingSessionId: sessionId },
+      new Date(),
+    );
+    const published = await activityRepository.record(
+      { type: 'review_published', actorId: userId, bookId, readingSessionId: sessionId },
+      new Date(),
+    );
+    await commentRepository.create(
+      { activityId: started.id, readingSessionId: sessionId, activityType: 'started_reading', authorId: userId, text: 'kept' },
+      new Date(),
+    );
+    await commentRepository.create(
+      { activityId: published.id, readingSessionId: sessionId, activityType: 'review_published', authorId: userId, text: 'gone' },
+      new Date(),
+    );
+    await reactionRepository.add(published.id, userId, sessionId, 'review_published', new Date());
+
+    await deleteReview({ userId, reviewId: review.id });
+
+    expect((await commentRepository.listByActivity(started.id, null, 20)).items).toHaveLength(1);
+    expect((await commentRepository.listByActivity(published.id, null, 20)).items).toHaveLength(0);
+    expect((await reactionRepository.countByActivityIds([published.id])).size).toBe(0);
   });
 });

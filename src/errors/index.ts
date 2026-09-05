@@ -25,3 +25,8 @@ export { FollowNotFoundError } from './follow-not-found-error';
 export { ReviewNotFoundError } from './review-not-found-error';
 export { ReviewAlreadyExistsError } from './review-already-exists-error';
 export { ReadingSessionNotFinishedError } from './reading-session-not-finished-error';
+export { ActivityNotFoundError } from './activity-not-found-error';
+export { UnsupportedActivityInteractionError } from './unsupported-activity-interaction-error';
+export { CommentNotFoundError } from './comment-not-found-error';
+export { CommentNestingTooDeepError } from './comment-nesting-too-deep-error';
+export { ReactionNotFoundError } from './reaction-not-found-error';
