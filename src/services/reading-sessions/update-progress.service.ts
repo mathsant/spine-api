@@ -1,4 +1,6 @@
+import type { Clock } from '../../container/cradle';
 import { ReadingSessionNotFoundError } from '../../errors';
+import type { ActivityRepository } from '../../repositories/activities';
 import type { ReadingSessionRepository } from '../../repositories/reading-sessions';
 import { toReadingSessionDTO } from './to-dto';
 import type { ReadingSessionDTO } from './types';
@@ -13,6 +15,8 @@ export type UpdateProgress = (input: UpdateProgressInput) => Promise<ReadingSess
 
 export interface UpdateProgressDeps {
   readingSessionRepository: ReadingSessionRepository;
+  activityRepository: ActivityRepository;
+  clock: Clock;
 }
 
 /**
@@ -21,7 +25,7 @@ export interface UpdateProgressDeps {
  * the same as a nonexistent one.
  */
 export const makeUpdateProgress =
-  ({ readingSessionRepository }: UpdateProgressDeps): UpdateProgress =>
+  ({ readingSessionRepository, activityRepository, clock }: UpdateProgressDeps): UpdateProgress =>
   async ({ userId, sessionId, currentPage }) => {
     const existing = await readingSessionRepository.findById(sessionId);
     if (!existing || existing.userId !== userId) {
@@ -29,5 +33,16 @@ export const makeUpdateProgress =
     }
 
     const record = await readingSessionRepository.updateProgress(sessionId, currentPage);
+    await activityRepository.record(
+      {
+        type: 'progress_update',
+        actorId: userId,
+        bookId: existing.bookId,
+        readingSessionId: sessionId,
+        currentPage,
+      },
+      clock.now(),
+    );
+
     return toReadingSessionDTO(record);
   };

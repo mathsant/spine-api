@@ -1,6 +1,7 @@
 import type { Db } from 'mongodb';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { MongoActivityRepository } from '../../../../src/repositories/activities';
 import { MongoBookRepository } from '../../../../src/repositories/books';
 import { MongoReadingSessionRepository } from '../../../../src/repositories/reading-sessions';
 import { MongoShelfMembershipRepository } from '../../../../src/repositories/shelf-memberships';
@@ -17,6 +18,7 @@ describe('mark-finished service (integration)', () => {
   let bookRepository: MongoBookRepository;
   let readingSessionRepository: MongoReadingSessionRepository;
   let shelfMembershipRepository: MongoShelfMembershipRepository;
+  let activityRepository: MongoActivityRepository;
   let openLibraryClient: FakeOpenLibraryClient;
   let markFinished: ReturnType<typeof makeMarkFinished>;
 
@@ -32,17 +34,22 @@ describe('mark-finished service (integration)', () => {
 
   beforeEach(async () => {
     await Promise.all(
-      ['books', 'shelf_memberships', 'reading_sessions'].map((c) => db.collection(c).deleteMany({})),
+      ['books', 'shelf_memberships', 'reading_sessions', 'activities'].map((c) =>
+        db.collection(c).deleteMany({}),
+      ),
     );
     bookRepository = new MongoBookRepository(db);
     readingSessionRepository = new MongoReadingSessionRepository(db);
     shelfMembershipRepository = new MongoShelfMembershipRepository(db);
+    activityRepository = new MongoActivityRepository(db);
     openLibraryClient = new FakeOpenLibraryClient();
     markFinished = makeMarkFinished({
       bookRepository,
       openLibraryClient,
       readingSessionRepository,
       shelfMembershipRepository,
+      activityRepository,
+      clock: { now: () => new Date('2025-06-01T00:00:00.000Z') },
     });
   });
 
@@ -90,5 +97,15 @@ describe('mark-finished service (integration)', () => {
     await markFinished({ userId, olid: 'OL12345W', finishedAt: new Date() });
 
     expect(await bookRepository.findByOlid('OL12345W')).not.toBeNull();
+  });
+
+  it('records a finished_reading activity (RF-002)', async () => {
+    await bookRepository.upsertByOlid(aSearchResult());
+
+    await markFinished({ userId, olid: 'OL12345W', finishedAt: new Date('2025-01-10T00:00:00.000Z') });
+
+    const page = await activityRepository.listForActors([userId], null, 20);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].type).toBe('finished_reading');
   });
 });

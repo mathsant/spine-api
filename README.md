@@ -178,6 +178,25 @@ on `users`.
 | `GET /v1/me/followers`                        | `cursor?`, `limit?`                | `200` `{ items, nextCursor }` | `400`, `401` |
 | `GET /v1/me/following`                        | `cursor?`, `limit?`                | `200` `{ items, nextCursor }` | `400`, `401` |
 
+## Feed
+
+The single endpoint below is under `/v1` and requires `Authorization: Bearer <accessToken>`. It
+mixes the caller's own activity with everyone they approved-follow — never a non-followed or
+still-pending one — in a single, cursor-paginated, reverse-chronological log (fan-out on read, no
+filter parameter yet). Four event types are logged as a side effect of existing endpoints:
+`started_reading` (explicit `start-reading`, not a duplicate on session reuse), `finished_reading`
+(`mark-finished` or `finish`, not duplicated on an idempotent re-finish), `review_published`
+(creating a review), and `progress_update` (every progress update, carrying the page number
+captured at that moment). A `review_published` item always shows the review's **current**
+content — editing it later updates what the feed shows, with no separate action needed. Deleting a
+reading session removes every event it produced; deleting only its review removes just the
+`review_published` event, leaving the rest of the session's history in place. Run `pnpm migrate:up`
+once to create the `activities` collection.
+
+| Method & path | Body / query | Success | Errors |
+| --- | --- | --- | --- |
+| `GET /v1/feed` | `cursor?`, `limit?` | `200` `{ items: [{ id, type, createdAt, actor, book, readingSessionId, currentPage, review }], nextCursor }` | `400`, `401` |
+
 ## Tests
 
 ```bash

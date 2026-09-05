@@ -1,5 +1,6 @@
 import type { Clock } from '../../container/cradle';
 import type { OpenLibraryClient } from '../../integrations/open-library';
+import type { ActivityRepository } from '../../repositories/activities';
 import type { BookRepository } from '../../repositories/books';
 import type { ReadingSessionRepository } from '../../repositories/reading-sessions';
 import type { ShelfMembershipRepository } from '../../repositories/shelf-memberships';
@@ -25,6 +26,7 @@ export interface StartReadingDeps {
   openLibraryClient: OpenLibraryClient;
   readingSessionRepository: ReadingSessionRepository;
   shelfMembershipRepository: ShelfMembershipRepository;
+  activityRepository: ActivityRepository;
   clock: Clock;
 }
 
@@ -39,14 +41,25 @@ export const makeStartReading =
     openLibraryClient,
     readingSessionRepository,
     shelfMembershipRepository,
+    activityRepository,
     clock,
   }: StartReadingDeps): StartReading =>
   async ({ userId, olid }) => {
     const book = await resolveBook({ bookRepository, openLibraryClient }, olid);
 
     const existing = await readingSessionRepository.findOpenSession(userId, book.id);
-    const record = await readingSessionRepository.startReading(userId, book.id, clock.now());
+    const now = clock.now();
+    const record = await readingSessionRepository.startReading(userId, book.id, now);
     await shelfMembershipRepository.remove(userId, book.id);
 
-    return { session: toReadingSessionDTO(record), created: existing === null };
+    const created = existing === null;
+    if (created) {
+      // Only a real, new session counts as a started_reading event (006, RF-001, D1).
+      await activityRepository.record(
+        { type: 'started_reading', actorId: userId, bookId: book.id, readingSessionId: record.id },
+        now,
+      );
+    }
+
+    return { session: toReadingSessionDTO(record), created };
   };

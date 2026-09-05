@@ -2,6 +2,7 @@ import type { Db } from 'mongodb';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { ReadingSessionNotFoundError } from '../../../../src/errors';
+import { MongoActivityRepository } from '../../../../src/repositories/activities';
 import { MongoReadingSessionRepository } from '../../../../src/repositories/reading-sessions';
 import { MongoReviewRepository } from '../../../../src/repositories/reviews';
 import { makeDeleteReadingSession } from '../../../../src/services/reading-sessions';
@@ -18,6 +19,7 @@ describe('delete-reading-session service (integration)', () => {
   let db: Db;
   let readingSessionRepository: MongoReadingSessionRepository;
   let reviewRepository: MongoReviewRepository;
+  let activityRepository: MongoActivityRepository;
   let deleteReadingSession: ReturnType<typeof makeDeleteReadingSession>;
 
   beforeAll(async () => {
@@ -32,11 +34,17 @@ describe('delete-reading-session service (integration)', () => {
   });
 
   beforeEach(async () => {
-    await db.collection('reading_sessions').deleteMany({});
-    await db.collection('reviews').deleteMany({});
+    await Promise.all(
+      ['reading_sessions', 'reviews', 'activities'].map((c) => db.collection(c).deleteMany({})),
+    );
     readingSessionRepository = new MongoReadingSessionRepository(db);
     reviewRepository = new MongoReviewRepository(db);
-    deleteReadingSession = makeDeleteReadingSession({ readingSessionRepository, reviewRepository });
+    activityRepository = new MongoActivityRepository(db);
+    deleteReadingSession = makeDeleteReadingSession({
+      readingSessionRepository,
+      reviewRepository,
+      activityRepository,
+    });
   });
 
   it('deletes a session owned by the user', async () => {
@@ -70,5 +78,26 @@ describe('delete-reading-session service (integration)', () => {
     const session = await readingSessionRepository.startReading(userId, bookId, new Date());
 
     await expect(deleteReadingSession({ userId, sessionId: session.id })).resolves.toBeUndefined();
+  });
+
+  it('cascades the delete to every activity event of the session (006, scenario 10)', async () => {
+    const session = await readingSessionRepository.startReading(userId, bookId, new Date());
+    await activityRepository.record(
+      { type: 'started_reading', actorId: userId, bookId, readingSessionId: session.id },
+      new Date(),
+    );
+    await activityRepository.record(
+      { type: 'progress_update', actorId: userId, bookId, readingSessionId: session.id, currentPage: 10 },
+      new Date(),
+    );
+    await activityRepository.record(
+      { type: 'review_published', actorId: userId, bookId, readingSessionId: session.id },
+      new Date(),
+    );
+
+    await deleteReadingSession({ userId, sessionId: session.id });
+
+    const page = await activityRepository.listForActors([userId], null, 20);
+    expect(page.items).toHaveLength(0);
   });
 });

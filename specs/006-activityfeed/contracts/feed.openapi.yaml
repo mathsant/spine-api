@@ -1,0 +1,127 @@
+openapi: 3.1.0
+info:
+  title: better-books — activity feed
+  version: 0.1.0
+  description: >
+    Contrato do único endpoint novo entregue pela feature 006-activityfeed. Referência:
+    spec RF-001..RF-013. Sob o prefixo /v1 e exige `Authorization: Bearer <accessToken>`.
+
+servers:
+  - url: /v1
+
+security:
+  - bearerAuth: []
+
+paths:
+  /feed:
+    get:
+      operationId: getFeed
+      summary: >
+        Feed de atividade paginado por cursor: mistura a própria atividade do usuário
+        autenticado com a de quem ele segue com follow aprovado (RF-006, RF-008),
+        ordenado do mais recente para o mais antigo.
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string, minLength: 1 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Página do feed (possivelmente vazia — RF-013).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeedCursorPage" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    ValidationError:
+      description: Cursor malformado ou `limit` fora do intervalo.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+    Unauthenticated:
+      description: Token de acesso ausente ou inválido.
+      content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, statusCode]
+          properties:
+            code: { type: string, pattern: "^[A-Z][A-Z0-9_]*$" }
+            message: { type: string }
+            statusCode: { type: integer }
+            details: {}
+
+    FeedActor:
+      type: object
+      required: [userId, handle, displayName]
+      properties:
+        userId: { type: string }
+        handle: { type: string }
+        displayName: { type: string }
+
+    FeedBook:
+      type: object
+      required: [id, title, authors, coverUrl]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        authors: { type: array, items: { type: string } }
+        coverUrl: { type: [string, "null"] }
+
+    Review:
+      type: object
+      required: [id, sessionId, rating, text, containsSpoiler, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        sessionId: { type: string }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        text: { type: [string, "null"] }
+        containsSpoiler: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    FeedItem:
+      type: object
+      required: [id, type, createdAt, actor, book, readingSessionId, currentPage, review]
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [started_reading, finished_reading, review_published, progress_update]
+        createdAt: { type: string, format: date-time }
+        actor: { $ref: "#/components/schemas/FeedActor" }
+        book: { $ref: "#/components/schemas/FeedBook" }
+        readingSessionId: { type: string }
+        currentPage:
+          type: [integer, "null"]
+          description: Preenchido só quando `type === 'progress_update'`.
+        review:
+          oneOf:
+            - { $ref: "#/components/schemas/Review" }
+            - type: "null"
+          description: Preenchido (estado atual, ao vivo) só quando `type === 'review_published'`.
+
+    FeedCursorPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FeedItem" }
+        nextCursor: { type: [string, "null"] }

@@ -64,6 +64,10 @@ export class MongoFollowRepository implements FollowRepository {
     return this.listByField('followerId', followerId, cursor, limit);
   }
 
+  async listFolloweeIds(followerId: string): Promise<string[]> {
+    return this.follows.distinct('followeeId', { followerId });
+  }
+
   private async listByField(
     field: 'followeeId' | 'followerId',
     value: string,

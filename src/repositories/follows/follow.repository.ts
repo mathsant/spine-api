@@ -31,4 +31,7 @@ export interface FollowRepository {
     cursor: string | null,
     limit: number,
   ): Promise<CursorPage<FollowRecord>>;
+
+  /** Full, unpaginated list of who `followerId` follows — internal use by the feed's `$in` filter (006, D6). */
+  listFolloweeIds(followerId: string): Promise<string[]>;
 }

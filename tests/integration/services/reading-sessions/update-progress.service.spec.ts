@@ -2,6 +2,7 @@ import type { Db } from 'mongodb';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { InvalidReadingSessionStateError, ReadingSessionNotFoundError } from '../../../../src/errors';
+import { MongoActivityRepository } from '../../../../src/repositories/activities';
 import { MongoReadingSessionRepository } from '../../../../src/repositories/reading-sessions';
 import { makeUpdateProgress } from '../../../../src/services/reading-sessions';
 import { ensureBookIndexes } from '../../../helpers/book-indexes';
@@ -15,6 +16,7 @@ describe('update-progress service (integration)', () => {
   let mongo: MongoMemory;
   let db: Db;
   let readingSessionRepository: MongoReadingSessionRepository;
+  let activityRepository: MongoActivityRepository;
   let updateProgress: ReturnType<typeof makeUpdateProgress>;
 
   beforeAll(async () => {
@@ -28,9 +30,14 @@ describe('update-progress service (integration)', () => {
   });
 
   beforeEach(async () => {
-    await db.collection('reading_sessions').deleteMany({});
+    await Promise.all(['reading_sessions', 'activities'].map((c) => db.collection(c).deleteMany({})));
     readingSessionRepository = new MongoReadingSessionRepository(db);
-    updateProgress = makeUpdateProgress({ readingSessionRepository });
+    activityRepository = new MongoActivityRepository(db);
+    updateProgress = makeUpdateProgress({
+      readingSessionRepository,
+      activityRepository,
+      clock: { now: () => new Date('2025-06-01T00:00:00.000Z') },
+    });
   });
 
   it('updates currentPage on a reading session owned by the user', async () => {
@@ -60,5 +67,17 @@ describe('update-progress service (integration)', () => {
     await expect(
       updateProgress({ userId, sessionId: '507f1f77bcf86cd799439000', currentPage: 10 }),
     ).rejects.toBeInstanceOf(ReadingSessionNotFoundError);
+  });
+
+  it('records a progress_update activity with the currentPage on every call (RF-004)', async () => {
+    const session = await readingSessionRepository.startReading(userId, bookId, new Date());
+
+    await updateProgress({ userId, sessionId: session.id, currentPage: 50 });
+    await updateProgress({ userId, sessionId: session.id, currentPage: 120 });
+
+    const page = await activityRepository.listForActors([userId], null, 20);
+    expect(page.items).toHaveLength(2);
+    expect(page.items.map((item) => item.currentPage).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([50, 120]);
+    expect(page.items.every((item) => item.type === 'progress_update')).toBe(true);
   });
 });
