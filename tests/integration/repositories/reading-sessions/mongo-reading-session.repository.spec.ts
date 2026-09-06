@@ -300,6 +300,23 @@ describe('MongoReadingSessionRepository (integration)', () => {
     });
   });
 
+  describe('countDistinctFinishedBooks', () => {
+    it('counts distinct books with a finished session; a reread counts once; reading-only excluded', async () => {
+      await repo.startReading(userId, 'book-reading', new Date());
+      await repo.createFinished(userId, 'book-b', { startedAt: null, finishedAt: new Date() });
+      await repo.createFinished(userId, 'book-b', { startedAt: null, finishedAt: new Date() }); // reread
+      await repo.createFinished(userId, 'book-c', { startedAt: null, finishedAt: new Date() });
+      await repo.createFinished(otherUserId, 'book-d', { startedAt: null, finishedAt: new Date() });
+
+      expect(await repo.countDistinctFinishedBooks(userId)).toBe(2);
+    });
+
+    it('returns 0 when the user has only reading sessions', async () => {
+      await repo.startReading(userId, 'book-a', new Date());
+      expect(await repo.countDistinctFinishedBooks(userId)).toBe(0);
+    });
+  });
+
   describe('aggregatePopularBookIdsForReaders', () => {
     it('returns [] for empty readerIds without touching the database', async () => {
       await expect(repo.aggregatePopularBookIdsForReaders([], [], 20)).resolves.toEqual([]);

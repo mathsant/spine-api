@@ -81,4 +81,14 @@ describe('MongoShelfMembershipRepository (integration)', () => {
     const ids = await repo.listBookIdsForUser(userId);
     expect([...ids].sort()).toEqual([bookId, otherBookId].sort());
   });
+
+  it('countForUser returns the number of want-to-read marks of the user only', async () => {
+    expect(await repo.countForUser(userId)).toBe(0);
+
+    await repo.add(userId, bookId);
+    await repo.add(userId, otherBookId);
+    await repo.add('another-user', 'not-mine');
+
+    expect(await repo.countForUser(userId)).toBe(2);
+  });
 });

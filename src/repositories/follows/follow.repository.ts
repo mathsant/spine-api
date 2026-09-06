@@ -34,4 +34,22 @@ export interface FollowRepository {
 
   /** Full, unpaginated list of who `followerId` follows — internal use by the feed's `$in` filter (006, D6). */
   listFolloweeIds(followerId: string): Promise<string[]>;
+
+  /**
+   * Subset of `candidateIds` that `followerId` approved-follows. Empty `candidateIds`
+   * returns `[]` without touching the database. Batch resolution of `followState` (011).
+   */
+  filterFollowing(followerId: string, candidateIds: string[]): Promise<string[]>;
+
+  /**
+   * Subset of `candidateIds` that approved-follow `followeeId`. Empty `candidateIds`
+   * returns `[]` without touching the database. Batch resolution of `followsYou` (011).
+   */
+  filterFollowers(followeeId: string, candidateIds: string[]): Promise<string[]>;
+
+  /** Count of approved follows where `userId` is the followee (011, GET /me/stats). */
+  countFollowers(userId: string): Promise<number>;
+
+  /** Count of approved follows where `userId` is the follower (011, GET /me/stats). */
+  countFollowing(userId: string): Promise<number>;
 }

@@ -12,8 +12,8 @@ import {
 import { makeResolveVisibleActivity } from '../services/activities';
 import { makeCreateComment, makeDeleteComment, makeListComments } from '../services/comments';
 import { makeGetHealth } from '../services/health';
-import { makeEditProfile } from '../services/profile';
-import { makeSearchUsers } from '../services/users';
+import { makeEditProfile, makeGetMyStats } from '../services/profile';
+import { makeGetUserProfile, makeListUserActivity, makeSearchUsers } from '../services/users';
 import {
   makeApproveFollowRequest,
   makeCancelFollowRequest,
@@ -114,8 +114,37 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
     editProfileService: asFunction((cradle: AppCradle) =>
       makeEditProfile({ userRepository: cradle.userRepository, clock: cradle.clock }),
     ).singleton(),
+    getMyStatsService: asFunction((cradle: AppCradle) =>
+      makeGetMyStats({
+        readingSessionRepository: cradle.readingSessionRepository,
+        followRepository: cradle.followRepository,
+        followRequestRepository: cradle.followRequestRepository,
+        shelfMembershipRepository: cradle.shelfMembershipRepository,
+      }),
+    ).singleton(),
     searchUsersService: asFunction((cradle: AppCradle) =>
-      makeSearchUsers({ userRepository: cradle.userRepository }),
+      makeSearchUsers({
+        userRepository: cradle.userRepository,
+        followRepository: cradle.followRepository,
+        followRequestRepository: cradle.followRequestRepository,
+      }),
+    ).singleton(),
+    getUserProfileService: asFunction((cradle: AppCradle) =>
+      makeGetUserProfile({
+        userRepository: cradle.userRepository,
+        followRepository: cradle.followRepository,
+        followRequestRepository: cradle.followRequestRepository,
+      }),
+    ).singleton(),
+    listUserActivityService: asFunction((cradle: AppCradle) =>
+      makeListUserActivity({
+        activityRepository: cradle.activityRepository,
+        followRepository: cradle.followRepository,
+        userRepository: cradle.userRepository,
+        bookRepository: cradle.bookRepository,
+        reviewRepository: cradle.reviewRepository,
+        reactionRepository: cradle.reactionRepository,
+      }),
     ).singleton(),
     sendFollowRequestService: asFunction((cradle: AppCradle) =>
       makeSendFollowRequest({
@@ -153,18 +182,21 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
     listFollowRequestsService: asFunction((cradle: AppCradle) =>
       makeListFollowRequests({
         followRequestRepository: cradle.followRequestRepository,
+        followRepository: cradle.followRepository,
         userRepository: cradle.userRepository,
       }),
     ).singleton(),
     listFollowersService: asFunction((cradle: AppCradle) =>
       makeListFollowers({
         followRepository: cradle.followRepository,
+        followRequestRepository: cradle.followRequestRepository,
         userRepository: cradle.userRepository,
       }),
     ).singleton(),
     listFollowingService: asFunction((cradle: AppCradle) =>
       makeListFollowing({
         followRepository: cradle.followRepository,
+        followRequestRepository: cradle.followRequestRepository,
         userRepository: cradle.userRepository,
       }),
     ).singleton(),

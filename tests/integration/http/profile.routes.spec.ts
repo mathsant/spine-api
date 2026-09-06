@@ -117,4 +117,30 @@ describe('profile routes (integration)', () => {
     const res = await app.inject({ method: 'PATCH', url: '/v1/me', payload: { displayName: 'X' } });
     expect(res.statusCode).toBe(401);
   });
+
+  // ---- GET /v1/me/stats (D3) ---------------------------------------------
+
+  it('GET /v1/me/stats: 200 with the five integer counters', async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/me/stats',
+      headers: { authorization: auth },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      booksRead: 0,
+      followers: 0,
+      following: 0,
+      pendingFollowRequests: 0,
+      wantToRead: 0,
+    });
+  });
+
+  it('GET /v1/me/stats: 401 without Authorization', async () => {
+    const app = await build();
+    const res = await app.inject({ method: 'GET', url: '/v1/me/stats' });
+    expect(res.statusCode).toBe(401);
+  });
 });

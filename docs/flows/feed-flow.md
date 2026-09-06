@@ -8,6 +8,10 @@ O feed é a lista de atividade — do próprio usuário e de quem ele segue com 
 2. **Paginar** — usar `nextCursor` da resposta anterior; ver `pagination-guide.md` para o mecanismo genérico de cursor.
 3. **Reagir/comentar em um item** — usar o `id` do item de feed como `activityId` nos endpoints de `interactions-flow.md`.
 
+## Atividade de uma única pessoa
+
+`GET /users/{userId}/activity` (`listUserActivity`, feature 011) devolve a atividade de **um** usuário no **mesmo formato de item** deste feed (`FeedItem`), ordenada por `createdAt` desc e paginada pelo mesmo cursor. Diferenças em relação a `GET /feed`: é a atividade de uma pessoa só (não o agregado de quem você segue), e o acesso exige follow **aprovado** ao alvo (ou ser o próprio) — qualquer outro caso responde `404 USER_NOT_FOUND` (neutro, nunca `403`). Ver `follow-flow.md`.
+
 ## Regras de negócio não óbvias
 
 - **Só aparece atividade de quem segue e foi aprovado** (mais o próprio usuário) — perfil privado por padrão (P6) se aplica também ao feed: seguir sem aprovação não traz nada dessa pessoa para o feed.

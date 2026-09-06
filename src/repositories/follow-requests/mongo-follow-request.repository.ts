@@ -77,6 +77,23 @@ export class MongoFollowRequestRepository implements FollowRequestRepository {
     return this.listByField('requesterId', requesterId, cursor, limit);
   }
 
+  async filterPendingTargets(requesterId: string, candidateIds: string[]): Promise<string[]> {
+    if (candidateIds.length === 0) {
+      return [];
+    }
+    const docs = await this.requests
+      .find(
+        { requesterId, targetId: { $in: candidateIds } },
+        { projection: { _id: 0, targetId: 1 } },
+      )
+      .toArray();
+    return docs.map((doc) => doc.targetId);
+  }
+
+  async countIncoming(userId: string): Promise<number> {
+    return this.requests.countDocuments({ targetId: userId });
+  }
+
   private async listByField(
     field: 'targetId' | 'requesterId',
     value: string,

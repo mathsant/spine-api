@@ -1,5 +1,7 @@
 import type { FollowRequestRecord, FollowRequestRepository } from '../../repositories/follow-requests';
+import type { FollowRepository } from '../../repositories/follows';
 import type { UserRepository } from '../../repositories/users';
+import { resolveRelationships } from './resolve-relationships';
 import type { FollowRequestCursorPageDTO } from './types';
 
 export interface ListFollowRequestsInput {
@@ -13,12 +15,18 @@ export type ListFollowRequests = (input: ListFollowRequestsInput) => Promise<Fol
 
 export interface ListFollowRequestsDeps {
   followRequestRepository: FollowRequestRepository;
+  followRepository: FollowRepository;
   userRepository: UserRepository;
 }
 
-/** Lists my pending follow requests, received or sent (cenário 4 da spec; D6 do research.md). */
+/** Lists my pending follow requests, received or sent. Each item carries
+ * `followState`/`followsYou` relative to me (011 — D4), resolved in one batch. */
 export const makeListFollowRequests =
-  ({ followRequestRepository, userRepository }: ListFollowRequestsDeps): ListFollowRequests =>
+  ({
+    followRequestRepository,
+    followRepository,
+    userRepository,
+  }: ListFollowRequestsDeps): ListFollowRequests =>
   async ({ userId, direction, cursor, limit }) => {
     const page =
       direction === 'incoming'
@@ -27,18 +35,29 @@ export const makeListFollowRequests =
 
     const otherSideId = (record: FollowRequestRecord): string =>
       direction === 'incoming' ? record.requesterId : record.targetId;
+    const otherSideIds = page.items.map(otherSideId);
 
-    const otherSides = await Promise.all(page.items.map((record) => userRepository.findById(otherSideId(record))));
+    const [otherSides, relationships] = await Promise.all([
+      Promise.all(otherSideIds.map((id) => userRepository.findById(id))),
+      resolveRelationships(userId, otherSideIds, { followRepository, followRequestRepository }),
+    ]);
 
     return {
       items: page.items.map((record, index) => {
         const otherSide = otherSides[index];
+        const id = otherSideId(record);
+        const relationship = relationships.get(id) ?? {
+          followState: 'none' as const,
+          followsYou: false,
+        };
         return {
-          userId: otherSideId(record),
+          userId: id,
           handle: otherSide?.handle ?? '',
           displayName: otherSide?.displayName ?? '',
           direction,
           createdAt: record.createdAt.toISOString(),
+          followState: relationship.followState,
+          followsYou: relationship.followsYou,
         };
       }),
       nextCursor: page.nextCursor,

@@ -68,6 +68,10 @@ export interface ReadingSessionRepository {
   /** Distinct `userId`s with at least one `finished` session of this book. */
   countDistinctFinishedReaders(bookId: string): Promise<number>;
 
+  /** Distinct `bookId`s this user has at least one `finished` session for — `booksRead`
+   * in `GET /me/stats` (011). A reread (several `finished` sessions of one book) counts once. */
+  countDistinctFinishedBooks(userId: string): Promise<number>;
+
   /**
    * At most one record per `userId` in `userIds`: that user's most recent `finished`
    * session of `bookId` (by `finishedAt`, then `createdAt`, then `_id`). Empty

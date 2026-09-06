@@ -36,4 +36,7 @@ export async function ensureFollowIndexes(db: Db): Promise<void> {
   await db
     .collection('follows')
     .createIndex({ followerId: 1, createdAt: -1 }, { name: 'follows_followerId_createdAt' });
+  await db
+    .collection('follows')
+    .createIndex({ followeeId: 1, followerId: 1 }, { name: 'follows_followeeId_followerId' });
 }

@@ -34,4 +34,13 @@ export interface FollowRequestRepository {
     cursor: string | null,
     limit: number,
   ): Promise<CursorPage<FollowRequestRecord>>;
+
+  /**
+   * Subset of `candidateIds` that `requesterId` has a pending follow request to. Empty
+   * `candidateIds` returns `[]` without touching the database. Batch `followState` (011).
+   */
+  filterPendingTargets(requesterId: string, candidateIds: string[]): Promise<string[]>;
+
+  /** Count of pending requests received by `userId` (011, GET /me/stats). */
+  countIncoming(userId: string): Promise<number>;
 }

@@ -75,4 +75,33 @@ describe('MongoFollowRepository (integration)', () => {
     const ids = await repo.listFolloweeIds(followerId);
     expect(ids.sort()).toEqual([followeeId, otherId].sort());
   });
+
+  it('filterFollowing returns the subset of candidateIds followerId approved-follows; [] for empty input', async () => {
+    await repo.create(followerId, followeeId, new Date());
+
+    expect(await repo.filterFollowing(followerId, [])).toEqual([]);
+    expect(await repo.filterFollowing(followerId, [followeeId, otherId])).toEqual([followeeId]);
+    expect(await repo.filterFollowing(otherId, [followeeId])).toEqual([]);
+  });
+
+  it('filterFollowers returns the subset of candidateIds that approved-follow followeeId; [] for empty input', async () => {
+    await repo.create(followerId, followeeId, new Date());
+    await repo.create(otherId, followeeId, new Date());
+
+    expect(await repo.filterFollowers(followeeId, [])).toEqual([]);
+    expect((await repo.filterFollowers(followeeId, [followerId, otherId])).sort()).toEqual(
+      [followerId, otherId].sort(),
+    );
+    expect(await repo.filterFollowers(followerId, [otherId])).toEqual([]);
+  });
+
+  it('countFollowers / countFollowing count approved follows in each direction', async () => {
+    await repo.create(followerId, followeeId, new Date());
+    await repo.create(otherId, followeeId, new Date());
+    await repo.create(followerId, otherId, new Date());
+
+    expect(await repo.countFollowers(followeeId)).toBe(2);
+    expect(await repo.countFollowing(followerId)).toBe(2);
+    expect(await repo.countFollowers(followerId)).toBe(0);
+  });
 });

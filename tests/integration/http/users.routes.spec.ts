@@ -3,9 +3,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { signAccessToken } from '../../../src/auth';
 import { buildApp } from '../../../src/app';
+import { MongoActivityRepository } from '../../../src/repositories/activities';
+import { MongoBookRepository } from '../../../src/repositories/books';
+import { MongoFollowRepository } from '../../../src/repositories/follows';
 import { MongoUserRepository } from '../../../src/repositories/users';
 import { ensureAuthIndexes } from '../../helpers/auth-indexes';
+import { ensureBookIndexes } from '../../helpers/book-indexes';
+import { ensureFollowIndexes } from '../../helpers/follow-indexes';
 import { testConfig } from '../../helpers/config';
+import { aSearchResult } from '../../helpers/fake-open-library-client';
 import { type MongoMemory, startMongoMemory } from '../../helpers/mongo-memory';
 
 const DB_NAME = 'users_routes_test';
@@ -15,26 +21,42 @@ describe('users routes (integration)', () => {
   let mongo: MongoMemory;
   let apps: FastifyInstance[] = [];
   let auth: string;
+  let aliceId: string;
+  let bobId: string;
 
   beforeAll(async () => {
     mongo = await startMongoMemory();
     const db = mongo.client.db(DB_NAME);
     await ensureAuthIndexes(db);
+    await ensureBookIndexes(db);
+    await ensureFollowIndexes(db);
 
-    const user = await new MongoUserRepository(db).create({
+    const users = new MongoUserRepository(db);
+    const alice = await users.create({
       email: 'alice@example.com',
       passwordHash: 'scrypt$1$1$1$c2FsdA==$aGFzaA==',
       handle: 'alice',
       displayName: 'Alice',
     });
-    auth = `Bearer ${signAccessToken({ userId: user.id }, SECRET)}`;
+    aliceId = alice.id;
+    auth = `Bearer ${signAccessToken({ userId: alice.id }, SECRET)}`;
 
-    await new MongoUserRepository(db).create({
+    const bob = await users.create({
       email: 'bob@example.com',
       passwordHash: 'scrypt$1$1$1$c2FsdA==$aGFzaA==',
       handle: 'bob',
       displayName: 'Bob',
     });
+    bobId = bob.id;
+    await users.updateProfile(bob.id, { bio: "Bob's private bio" }, new Date());
+
+    // alice approve-follows bob; bob has one activity item
+    await new MongoFollowRepository(db).create(alice.id, bob.id, new Date());
+    const book = await new MongoBookRepository(db).upsertByOlid(aSearchResult());
+    await new MongoActivityRepository(db).record(
+      { type: 'started_reading', actorId: bob.id, bookId: book.id, readingSessionId: 's1' },
+      new Date('2026-02-01T00:00:00.000Z'),
+    );
   });
 
   afterAll(async () => {
@@ -52,7 +74,9 @@ describe('users routes (integration)', () => {
     return app;
   }
 
-  it('GET /v1/users/search: 200 with avatarUrl: null on every item (cenário 3)', async () => {
+  // --- GET /v1/users/search ---
+
+  it('GET /v1/users/search: 200 with avatarUrl null and a relationship on every item', async () => {
     const app = await build();
     const res = await app.inject({
       method: 'GET',
@@ -63,7 +87,13 @@ describe('users routes (integration)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.items).toHaveLength(1);
-    expect(body.items[0]).toMatchObject({ handle: 'bob', displayName: 'Bob', avatarUrl: null });
+    expect(body.items[0]).toMatchObject({
+      handle: 'bob',
+      displayName: 'Bob',
+      avatarUrl: null,
+      followState: 'following',
+      followsYou: false,
+    });
     expect(body.items[0]).not.toHaveProperty('email');
   });
 
@@ -77,19 +107,100 @@ describe('users routes (integration)', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('GET /v1/users/search: 400 without q', async () => {
+  it('GET /v1/users/search: 401 without Authorization', async () => {
+    const app = await build();
+    const res = await app.inject({ method: 'GET', url: '/v1/users/search?q=bob' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  // --- GET /v1/users/:userId (D1) ---
+
+  it('GET /v1/users/:userId: 200 with bio and followState following for an approved follow', async () => {
     const app = await build();
     const res = await app.inject({
       method: 'GET',
-      url: '/v1/users/search',
+      url: `/v1/users/${bobId}`,
+      headers: { authorization: auth },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      id: bobId,
+      handle: 'bob',
+      displayName: 'Bob',
+      avatarUrl: null,
+      bio: "Bob's private bio",
+      followState: 'following',
+      followsYou: false,
+    });
+  });
+
+  it('GET /v1/users/:userId: 404 USER_NOT_FOUND with an identical body for a nonexistent and a malformed id', async () => {
+    const app = await build();
+    const missing = await app.inject({
+      method: 'GET',
+      url: '/v1/users/507f1f77bcf86cd799439099',
+      headers: { authorization: auth },
+    });
+    const malformed = await app.inject({
+      method: 'GET',
+      url: '/v1/users/not-an-id',
+      headers: { authorization: auth },
+    });
+
+    expect(missing.statusCode).toBe(404);
+    expect(malformed.statusCode).toBe(404);
+    expect(missing.json().error.code).toBe('USER_NOT_FOUND');
+    expect(malformed.json()).toEqual(missing.json());
+  });
+
+  it('GET /v1/users/:userId: 401 without Authorization', async () => {
+    const app = await build();
+    const res = await app.inject({ method: 'GET', url: `/v1/users/${bobId}` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  // --- GET /v1/users/:userId/activity (D2) ---
+
+  it('GET /v1/users/:userId/activity: 200 { items, nextCursor } for an approved follower', async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: `/v1/users/${bobId}/activity`,
+      headers: { authorization: auth },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({ type: 'started_reading', actor: { userId: bobId } });
+    expect(body).toHaveProperty('nextCursor');
+  });
+
+  it('GET /v1/users/:userId/activity: 404 USER_NOT_FOUND when not following the target', async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: `/v1/users/${aliceId}/activity`,
+      headers: { authorization: `Bearer ${signAccessToken({ userId: bobId }, SECRET)}` },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe('USER_NOT_FOUND');
+  });
+
+  it('GET /v1/users/:userId/activity: 400 for a limit outside 1..100', async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: `/v1/users/${bobId}/activity?limit=999`,
       headers: { authorization: auth },
     });
     expect(res.statusCode).toBe(400);
   });
 
-  it('GET /v1/users/search: 401 without Authorization', async () => {
+  it('GET /v1/users/:userId/activity: 401 without Authorization', async () => {
     const app = await build();
-    const res = await app.inject({ method: 'GET', url: '/v1/users/search?q=bob' });
+    const res = await app.inject({ method: 'GET', url: `/v1/users/${bobId}/activity` });
     expect(res.statusCode).toBe(401);
   });
 });

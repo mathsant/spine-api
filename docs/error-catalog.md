@@ -31,6 +31,7 @@ Toda resposta de erro da API segue o mesmo formato, não importa o domínio:
 |---|---|---|---|---|
 | `VALIDATION_ERROR` | 400 | `ValidationError` | Qualquer endpoint com corpo/query validado por `zod` | Corpo ou querystring reprovado pelo schema. `details` lista os campos. |
 | `NOT_FOUND` | 404 | `NotFoundError` | `POST /users/{userId}/follow-request` | `:userId` do pedido de follow não existe como usuário. |
+| `USER_NOT_FOUND` | 404 | `UserNotFoundError` | `GET /users/{userId}`, `GET /users/{userId}/activity` | `userId` não corresponde a nenhum usuário (inclusive identificador malformado), OU o usuário existe mas não é visível para você (`.../activity` sem follow aprovado). As duas situações respondem exatamente igual — não vaza a existência de perfil privado (P6). Nunca `403`, nunca `400` por causa de `userId`. |
 | `DATABASE_UNAVAILABLE` | 503 | `DatabaseUnavailableError` | Qualquer endpoint que dependa do MongoDB | O banco não responde — erro de infraestrutura, não de regra de negócio. |
 | `EMAIL_ALREADY_IN_USE` | 409 | `EmailAlreadyInUseError` | `POST /auth/signup` | O e-mail normalizado já pertence a uma conta. |
 | `HANDLE_ALREADY_IN_USE` | 409 | `HandleAlreadyInUseError` | `POST /auth/signup` | O handle normalizado já pertence a uma conta. |

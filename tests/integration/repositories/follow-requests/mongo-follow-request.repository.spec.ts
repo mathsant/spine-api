@@ -71,4 +71,22 @@ describe('MongoFollowRequestRepository (integration)', () => {
     expect(outgoing.items).toHaveLength(1);
     expect(outgoing.items[0].targetId).toBe(targetId);
   });
+
+  it('filterPendingTargets returns the subset of candidateIds requesterId has a pending request to; [] for empty input', async () => {
+    await repo.create(requesterId, targetId, new Date());
+
+    expect(await repo.filterPendingTargets(requesterId, [])).toEqual([]);
+    expect(await repo.filterPendingTargets(requesterId, [targetId, otherId])).toEqual([targetId]);
+    expect(await repo.filterPendingTargets(otherId, [targetId])).toEqual([]);
+  });
+
+  it('countIncoming counts pending requests received by userId', async () => {
+    await repo.create(requesterId, targetId, new Date());
+    await repo.create(otherId, targetId, new Date());
+    await repo.create(requesterId, otherId, new Date());
+
+    expect(await repo.countIncoming(targetId)).toBe(2);
+    expect(await repo.countIncoming(otherId)).toBe(1);
+    expect(await repo.countIncoming(requesterId)).toBe(0);
+  });
 });

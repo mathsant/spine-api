@@ -211,6 +211,11 @@ export class MongoReadingSessionRepository implements ReadingSessionRepository {
     return readers.length;
   }
 
+  async countDistinctFinishedBooks(userId: string): Promise<number> {
+    const books = await this.sessions.distinct('bookId', { userId, status: 'finished' });
+    return books.length;
+  }
+
   async findLatestFinishedPerUserForBook(
     bookId: string,
     userIds: string[],

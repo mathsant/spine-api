@@ -22,4 +22,6 @@ export interface ShelfMembershipRepository {
   /** Distinct `bookId`s this user marked as want-to-read. Feature 010 — used to
    * exclude already-known books from `GET /books/popular-among-following`. */
   listBookIdsForUser(userId: string): Promise<string[]>;
+  /** Count of this user's want-to-read marks — `wantToRead` in `GET /me/stats` (011). */
+  countForUser(userId: string): Promise<number>;
 }

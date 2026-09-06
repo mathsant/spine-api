@@ -3,6 +3,7 @@ export type { AppErrorOptions } from './app-error';
 export { ValidationError } from './validation-error';
 export type { ValidationIssue } from './validation-error';
 export { NotFoundError } from './not-found-error';
+export { UserNotFoundError } from './user-not-found-error';
 export { DatabaseUnavailableError } from './database-unavailable-error';
 export { EmailAlreadyInUseError } from './email-already-in-use-error';
 export { HandleAlreadyInUseError } from './handle-already-in-use-error';

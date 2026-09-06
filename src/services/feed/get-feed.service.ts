@@ -4,7 +4,7 @@ import type { FollowRepository } from '../../repositories/follows';
 import type { ReactionRepository } from '../../repositories/reactions';
 import type { ReviewRepository } from '../../repositories/reviews';
 import type { UserRepository } from '../../repositories/users';
-import { toFeedItemDTO } from './to-dto';
+import { hydrateActivities } from './hydrate-activities';
 import type { FeedCursorPageDTO } from './types';
 
 export interface GetFeedInput {
@@ -22,10 +22,6 @@ export interface GetFeedDeps {
   bookRepository: BookRepository;
   reviewRepository: ReviewRepository;
   reactionRepository: ReactionRepository;
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
 }
 
 /**
@@ -46,37 +42,10 @@ export const makeGetFeed =
     const followeeIds = await followRepository.listFolloweeIds(userId);
     const page = await activityRepository.listForActors([userId, ...followeeIds], cursor, limit);
 
-    const actorIds = unique(page.items.map((item) => item.actorId));
-    const bookIds = unique(page.items.map((item) => item.bookId));
-    const activityIds = page.items.map((item) => item.id);
-    const reviewSessionIds = page.items
-      .filter((item) => item.type === 'review_published')
-      .map((item) => item.readingSessionId);
-
-    const [actors, books, reviews, reactionCounts, reactedActivityIds] = await Promise.all([
-      Promise.all(actorIds.map((id) => userRepository.findById(id))),
-      Promise.all(bookIds.map((id) => bookRepository.findById(id))),
-      reviewRepository.findBySessionIds(reviewSessionIds),
-      reactionRepository.countByActivityIds(activityIds),
-      reactionRepository.listReactedActivityIds(userId, activityIds),
-    ]);
-
-    const actorById = new Map(actorIds.map((id, index) => [id, actors[index] ?? undefined]));
-    const bookById = new Map(bookIds.map((id, index) => [id, books[index] ?? undefined]));
-    const reviewBySessionId = new Map(reviews.map((review) => [review.sessionId, review]));
-    const reactedSet = new Set(reactedActivityIds);
-
-    return {
-      items: page.items.map((activity) =>
-        toFeedItemDTO(
-          activity,
-          actorById.get(activity.actorId) ?? undefined,
-          bookById.get(activity.bookId) ?? undefined,
-          reviewBySessionId.get(activity.readingSessionId) ?? null,
-          reactionCounts.get(activity.id) ?? 0,
-          reactedSet.has(activity.id),
-        ),
-      ),
-      nextCursor: page.nextCursor,
-    };
+    return hydrateActivities(userId, page, {
+      userRepository,
+      bookRepository,
+      reviewRepository,
+      reactionRepository,
+    });
   };

@@ -1,9 +1,16 @@
+import type { FollowState } from './resolve-relationships';
+
 export interface FollowRequestDTO {
   userId: string;
   handle: string;
   displayName: string;
   direction: 'incoming' | 'outgoing';
   createdAt: string;
+  /** Viewer -> this user. In `direction: outgoing` this is always `pending`. */
+  followState: FollowState;
+  /** This user -> viewer (approved follow only). In `direction: incoming` this is
+   * `false` until the viewer approves the request. */
+  followsYou: boolean;
 }
 
 export interface FollowRequestCursorPageDTO {
@@ -23,6 +30,10 @@ export interface FollowedUserDTO {
   handle: string;
   displayName: string;
   createdAt: string;
+  /** Viewer -> this user. In `GET /me/following` this is always `following`. */
+  followState: FollowState;
+  /** This user -> viewer (approved follow only). In `GET /me/followers` this is always `true`. */
+  followsYou: boolean;
 }
 
 export interface FollowCursorPageDTO {

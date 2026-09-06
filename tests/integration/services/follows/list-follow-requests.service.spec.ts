@@ -2,6 +2,7 @@ import type { Db } from 'mongodb';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { MongoFollowRequestRepository } from '../../../../src/repositories/follow-requests';
+import { MongoFollowRepository } from '../../../../src/repositories/follows';
 import { MongoUserRepository } from '../../../../src/repositories/users';
 import { makeListFollowRequests } from '../../../../src/services/follows';
 import { ensureAuthIndexes } from '../../../helpers/auth-indexes';
@@ -13,6 +14,7 @@ describe('list-follow-requests service (integration)', () => {
   let db: Db;
   let userRepository: MongoUserRepository;
   let followRequestRepository: MongoFollowRequestRepository;
+  let followRepository: MongoFollowRepository;
   let listFollowRequests: ReturnType<typeof makeListFollowRequests>;
 
   beforeAll(async () => {
@@ -27,10 +29,17 @@ describe('list-follow-requests service (integration)', () => {
   });
 
   beforeEach(async () => {
-    await Promise.all(['users', 'follow_requests'].map((c) => db.collection(c).deleteMany({})));
+    await Promise.all(
+      ['users', 'follow_requests', 'follows'].map((c) => db.collection(c).deleteMany({})),
+    );
     userRepository = new MongoUserRepository(db);
     followRequestRepository = new MongoFollowRequestRepository(db);
-    listFollowRequests = makeListFollowRequests({ followRequestRepository, userRepository });
+    followRepository = new MongoFollowRepository(db);
+    listFollowRequests = makeListFollowRequests({
+      followRequestRepository,
+      followRepository,
+      userRepository,
+    });
   });
 
   async function createUser(handle: string) {
@@ -90,5 +99,37 @@ describe('list-follow-requests service (integration)', () => {
     });
     expect(nextPage.items).toHaveLength(1);
     expect(nextPage.items[0].userId).not.toBe(page.items[0].userId);
+  });
+
+  it('incoming: followsYou is false until approved, followState reflects my real state (scenario 25)', async () => {
+    const me = await createUser('me');
+    const asker = await createUser('asker');
+    await followRequestRepository.create(asker.id, me.id, new Date());
+    await followRepository.create(me.id, asker.id, new Date()); // I already follow the asker
+
+    const incoming = await listFollowRequests({
+      userId: me.id,
+      direction: 'incoming',
+      cursor: null,
+      limit: 20,
+    });
+
+    expect(incoming.items[0]).toMatchObject({ followState: 'following', followsYou: false });
+  });
+
+  it('outgoing: followState is always pending (scenario 26)', async () => {
+    const me = await createUser('me');
+    const target = await createUser('target');
+    await followRequestRepository.create(me.id, target.id, new Date());
+    await followRepository.create(target.id, me.id, new Date()); // target follows me
+
+    const outgoing = await listFollowRequests({
+      userId: me.id,
+      direction: 'outgoing',
+      cursor: null,
+      limit: 20,
+    });
+
+    expect(outgoing.items[0]).toMatchObject({ followState: 'pending', followsYou: true });
   });
 });

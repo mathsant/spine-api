@@ -43,3 +43,9 @@ export type {
   FollowedUserDTO,
   FollowCursorPageDTO,
 } from './types';
+export { resolveRelationships } from './resolve-relationships';
+export type {
+  FollowState,
+  Relationship,
+  ResolveRelationshipsDeps,
+} from './resolve-relationships';

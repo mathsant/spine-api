@@ -42,7 +42,7 @@ import type {
   MarkAllNotificationsRead,
   MarkNotificationRead,
 } from '../services/notifications';
-import type { EditProfile } from '../services/profile';
+import type { EditProfile, GetMyStats } from '../services/profile';
 import type {
   DeleteReadingSession,
   EditReadingSession,
@@ -54,7 +54,7 @@ import type {
 } from '../services/reading-sessions';
 import type { CreateReview, DeleteReview, EditReview } from '../services/reviews';
 import type { CreateReaction, DeleteReaction } from '../services/reactions';
-import type { SearchUsers } from '../services/users';
+import type { GetUserProfile, ListUserActivity, SearchUsers } from '../services/users';
 import type {
   ApproveFollowRequest,
   CancelFollowRequest,
@@ -104,6 +104,7 @@ export interface AppCradle {
   logoutService: Logout;
   changePasswordService: ChangePassword;
   editProfileService: EditProfile;
+  getMyStatsService: GetMyStats;
   searchBooksService: SearchBooks;
   getBookService: GetBook;
   markWantToReadService: MarkWantToRead;
@@ -119,6 +120,8 @@ export interface AppCradle {
   deleteReadingSessionService: DeleteReadingSession;
   listReadingSessionsService: ListReadingSessions;
   searchUsersService: SearchUsers;
+  getUserProfileService: GetUserProfile;
+  listUserActivityService: ListUserActivity;
   sendFollowRequestService: SendFollowRequest;
   cancelFollowRequestService: CancelFollowRequest;
   approveFollowRequestService: ApproveFollowRequest;

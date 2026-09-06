@@ -22,20 +22,20 @@ Contexto completo — glossário de domínio, decisões de produto travadas (P1�
 <!-- O bloco AUTO-GERADO é anexado abaixo na primeira vez que /plan rodar. -->
 
 <!-- SDD:AUTO-GERADO:INICIO -->
-<!-- Gerado automaticamente por update-agent-context.sh a partir de E:/projetos/better-books/specs/010-readingcontractgaps/plan.md. -->
+<!-- Gerado automaticamente por update-agent-context.sh a partir de E:/projetos/better-books/specs/011-userconnectionscontractgaps/plan.md. -->
 <!-- Não edite esta seção manualmente; edite o plan.md e rode o script de novo. -->
 
-## Stack ativa (feature: 010-readingcontractgaps)
+## Stack ativa (feature: 011-userconnectionscontractgaps)
 
 
 **Linguagem/versão**: TypeScript ~5.9 (`strict`, `module: commonjs`, `target: es2016`) sobre Node.js v24. Sem mudança.
-**Dependências principais**: Fastify 5, Awilix (`@fastify/awilix`) para DI, driver nativo `mongodb` 7, `zod` 4. Nenhuma dependência de runtime nova. `@redocly/cli` (devDependency já existente, da feature 009) é usada por `pnpm docs:lint`.
-**Armazenamento**: MongoDB (driver nativo, sem ODM), migrations com `migrate-mongo`. Esta feature **não cria coleção**; adiciona **3 índices** (1 migration) e **1 campo opcional** sem índice (`books.pageCount`, sem migration — schemaless, preenchimento lazy).
-**Testes**: Vitest, dois *projects* (`unit` / `integration`). Regra de negócio → integração com `mongodb-memory-server` (sem mock de banco), ≥ 70% cobertura, caminho feliz + ≥1 erro. Funções puras (mappers, schemas zod, cursor codec) → unitário isolado. Verificação de docs: `pnpm docs:lint` + cruzamento de rotas/schemas.
-**Plataforma-alvo**: servidor (API HTTP), consumida pelo app web da `002-reading-books` e por ferramentas OpenAPI.
-**Tipo de projeto**: single (monolito backend em camadas `controller → service → repository`). Esta feature não altera as camadas, só adiciona operações e um campo.
-**Metas de performance**: N/A explícito. Os índices novos (research D7) evitam collection scan nas 3 queries novas conforme a base cresce.
-**Restrições**: sem mudança em auth, em `follow-requests`/aprovação, nem no modelo persistido de `Review` e `ReadingSession` (só consulta/serialização). Nomes de arquivo/identificador em inglês; prosa dos artefatos SDD em português. Exemplos nos docs com dados fictícios.
-**Escala/escopo**: 2 endpoints novos + 1 alterado + 1 campo novo em 4 superfícies de livro. ~6 arquivos de serviço/controller novos, ~10 arquivos existentes tocados, 3 métodos de repositório novos, 1 migration, 1 codec de cursor, delta no `docs/openapi.yaml` + 3 guias em `docs/`.
+**Dependências principais**: Fastify 5, Awilix (`@fastify/awilix`) para DI, driver nativo `mongodb`, `zod` 4. **Nenhuma dependência nova.**
+**Armazenamento**: MongoDB (driver nativo, sem ODM), migrations com `migrate-mongo`. Esta feature **não cria coleção** e **não faz migração de dados**; adiciona **1 índice** (1 migration).
+**Testes**: Vitest, dois *projects* (`unit` / `integration`). Regra de negócio → integração com `mongodb-memory-server` (sem mock de banco), ≥ 70% cobertura, caminho feliz + ≥1 erro. Funções puras (mappers, schemas zod) → unitário.
+**Plataforma-alvo**: servidor (API HTTP), consumida pelo app web da feature de front-end `004-userconnections` e por ferramentas OpenAPI.
+**Tipo de projeto**: single (monolito backend em camadas `controller → service → repository`).
+**Metas de performance**: N/A explícito. RNF-001: as queries novas não podem fazer collection scan — ver research D4.
+**Restrições**: sem mudança em auth, em `follow-requests`/aprovação, nem no modelo persistido de `User`/`Follow`/`FollowRequest`/`Activity`/`Review`/`ReadingSession` (só consulta/serialização). `avatarUrl` continua sempre `null`. Nomes de arquivo/identificador em inglês; prosa dos artefatos SDD em português. Exemplos nos docs com dados fictícios.
+**Escala/escopo**: 3 endpoints novos (`GET /users/{userId}`, `GET /users/{userId}/activity`, `GET /me/stats`) + 4 campos novos em 3 schemas de lista. ~9 arquivos de service/controller/schema novos, ~10 arquivos existentes tocados, 6 métodos de repositório novos, 1 helper de feed extraído, 1 migration de índice, delta no `docs/openapi.yaml` + 2 guias de fluxo + catálogo de erros.
 
 <!-- SDD:AUTO-GERADO:FIM -->

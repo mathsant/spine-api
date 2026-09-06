@@ -1,6 +1,7 @@
 import type { Db } from 'mongodb';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { MongoFollowRequestRepository } from '../../../../src/repositories/follow-requests';
 import { MongoFollowRepository } from '../../../../src/repositories/follows';
 import { MongoUserRepository } from '../../../../src/repositories/users';
 import { makeListFollowers } from '../../../../src/services/follows';
@@ -13,6 +14,7 @@ describe('list-followers service (integration)', () => {
   let db: Db;
   let userRepository: MongoUserRepository;
   let followRepository: MongoFollowRepository;
+  let followRequestRepository: MongoFollowRequestRepository;
   let listFollowers: ReturnType<typeof makeListFollowers>;
 
   beforeAll(async () => {
@@ -27,10 +29,13 @@ describe('list-followers service (integration)', () => {
   });
 
   beforeEach(async () => {
-    await Promise.all(['users', 'follows'].map((c) => db.collection(c).deleteMany({})));
+    await Promise.all(
+      ['users', 'follows', 'follow_requests'].map((c) => db.collection(c).deleteMany({})),
+    );
     userRepository = new MongoUserRepository(db);
     followRepository = new MongoFollowRepository(db);
-    listFollowers = makeListFollowers({ followRepository, userRepository });
+    followRequestRepository = new MongoFollowRequestRepository(db);
+    listFollowers = makeListFollowers({ followRepository, followRequestRepository, userRepository });
   });
 
   async function createUser(handle: string) {
@@ -52,5 +57,21 @@ describe('list-followers service (integration)', () => {
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({ userId: bob.id, handle: 'bob', displayName: 'bob' });
     expect(result.nextCursor).toBeNull();
+  });
+
+  it('each item carries followsYou always true, and followState indicating follow-back (scenario 24)', async () => {
+    const alice = await createUser('alice');
+    const bob = await createUser('bob');
+    const carol = await createUser('carol');
+    await followRepository.create(bob.id, alice.id, new Date());
+    await followRepository.create(carol.id, alice.id, new Date());
+    await followRepository.create(alice.id, bob.id, new Date()); // alice follows bob back
+
+    const result = await listFollowers({ userId: alice.id, cursor: null, limit: 20 });
+    const byId = new Map(result.items.map((item) => [item.userId, item]));
+
+    expect(result.items.every((item) => item.followsYou === true)).toBe(true);
+    expect(byId.get(bob.id)?.followState).toBe('following');
+    expect(byId.get(carol.id)?.followState).toBe('none');
   });
 });

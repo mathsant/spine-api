@@ -68,6 +68,40 @@ export class MongoFollowRepository implements FollowRepository {
     return this.follows.distinct('followeeId', { followerId });
   }
 
+  async filterFollowing(followerId: string, candidateIds: string[]): Promise<string[]> {
+    if (candidateIds.length === 0) {
+      return [];
+    }
+    const docs = await this.follows
+      .find(
+        { followerId, followeeId: { $in: candidateIds } },
+        { projection: { _id: 0, followeeId: 1 } },
+      )
+      .toArray();
+    return docs.map((doc) => doc.followeeId);
+  }
+
+  async filterFollowers(followeeId: string, candidateIds: string[]): Promise<string[]> {
+    if (candidateIds.length === 0) {
+      return [];
+    }
+    const docs = await this.follows
+      .find(
+        { followeeId, followerId: { $in: candidateIds } },
+        { projection: { _id: 0, followerId: 1 } },
+      )
+      .toArray();
+    return docs.map((doc) => doc.followerId);
+  }
+
+  async countFollowers(userId: string): Promise<number> {
+    return this.follows.countDocuments({ followeeId: userId });
+  }
+
+  async countFollowing(userId: string): Promise<number> {
+    return this.follows.countDocuments({ followerId: userId });
+  }
+
   private async listByField(
     field: 'followeeId' | 'followerId',
     value: string,

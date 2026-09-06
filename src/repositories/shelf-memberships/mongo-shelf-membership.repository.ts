@@ -41,6 +41,10 @@ export class MongoShelfMembershipRepository implements ShelfMembershipRepository
     return this.memberships.distinct('bookId', { userId });
   }
 
+  async countForUser(userId: string): Promise<number> {
+    return this.memberships.countDocuments({ userId });
+  }
+
   async list(
     userId: string,
     cursor: string | null,
