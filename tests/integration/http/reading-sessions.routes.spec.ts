@@ -310,6 +310,7 @@ describe('reading-sessions routes (integration)', () => {
     expect(history.statusCode).toBe(200);
     expect(history.json().items).toHaveLength(2);
     expect(history.json().items[0].book).toMatchObject({
+      olid: 'OL_STUB_W',
       title: 'Stub Book',
       authors: ['Stub Author'],
     });

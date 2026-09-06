@@ -22,6 +22,7 @@ export function toReadingSessionDTO(
 
 function toReadingSessionBookDTO(book: BookRecord | undefined): ReadingSessionBookDTO {
   return {
+    olid: book?.olid ?? '',
     title: book?.title ?? '',
     authors: book?.authors ?? [],
     coverUrl: book?.coverUrl ?? null,

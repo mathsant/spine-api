@@ -145,6 +145,7 @@ O tipo ganha o campo opcional `book`, preenchido **apenas** por `list-reading-se
 }
 
 ReadingSessionBookDTO = {
+  olid: string;              // para abrir GET /books/{olid} — bookId da session é id interno, sem rota de lookup
   title: string;
   authors: string[];
   coverUrl: string | null;

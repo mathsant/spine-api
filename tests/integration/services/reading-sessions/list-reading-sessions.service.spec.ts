@@ -178,6 +178,7 @@ describe('list-reading-sessions service (integration)', () => {
       const page = await listReadingSessions({ userId, cursor: null, limit: 20 });
 
       expect(page.items[0].book).toEqual({
+        olid: 'OL_HIST_W',
         title: 'Historia',
         authors: book.authors,
         coverUrl: book.coverUrl,

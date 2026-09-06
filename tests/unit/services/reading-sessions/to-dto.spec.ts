@@ -39,6 +39,7 @@ describe('toReadingSessionListItemDTO', () => {
   it('embeds a compact book summary alongside the session fields', () => {
     const dto = toReadingSessionListItemDTO(session, null, book);
     expect(dto.book).toEqual({
+      olid: 'OL1W',
       title: 'Duna',
       authors: ['Frank Herbert'],
       coverUrl: 'https://covers/1.jpg',
@@ -50,6 +51,6 @@ describe('toReadingSessionListItemDTO', () => {
 
   it('falls back to an empty summary when the book is missing', () => {
     const dto = toReadingSessionListItemDTO(session, null, undefined);
-    expect(dto.book).toEqual({ title: '', authors: [], coverUrl: null, pageCount: null });
+    expect(dto.book).toEqual({ olid: '', title: '', authors: [], coverUrl: null, pageCount: null });
   });
 });

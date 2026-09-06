@@ -126,8 +126,9 @@ Mudanças vs. hoje: (a) novo parâmetro `status`; (b) `bookId` ganha `descriptio
     ReadingSessionBook:
       type: object
       additionalProperties: false
-      required: [title, authors, coverUrl, pageCount]
+      required: [olid, title, authors, coverUrl, pageCount]
       properties:
+        olid: { type: string, description: "Para abrir o detalhe via GET /books/{olid} — o bookId da session e o id interno, sem rota de lookup." }
         title: { type: string }
         authors: { type: array, items: { type: string } }
         coverUrl: { type: [string, "null"] }
