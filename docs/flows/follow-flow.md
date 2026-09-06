@@ -15,6 +15,7 @@ O modelo social do better-books é **seguir, assimétrico, com aprovação** (de
 7. **Ver o perfil de uma pessoa** — `GET /users/{userId}` (`getUserProfile`). Ver "Perfil de uma pessoa" abaixo.
 8. **Ver a atividade de uma pessoa** — `GET /users/{userId}/activity` (`listUserActivity`), só com follow aprovado. Ver abaixo.
 9. **Meus contadores** — `GET /me/stats` (`getMyStats`). Ver abaixo.
+10. **Sugestões de quem seguir** — `GET /users/suggestions` (`getFollowSuggestions`). Ver abaixo.
 
 ## Perfil de uma pessoa (`GET /users/{userId}`)
 
@@ -48,6 +49,19 @@ O modelo social do better-books é **seguir, assimétrico, com aprovação** (de
 
 Todos inteiros `>= 0`. Único erro: `401`.
 
+## Sugestões de quem seguir (`GET /users/suggestions`)
+
+`getFollowSuggestions`, autenticado. Alimenta a seção "Pessoas para seguir" do trilho direito do feed (front-end `005-paginatedfeed`). **Sem nenhum parâmetro de query** (não é busca, não é paginado, não tem `limit`).
+
+- **No máximo 4 itens.** Cada item = a superfície de `UserSearchResult` (`id`, `handle`, `displayName`, `avatarUrl` sempre `null`, `followState`, `followsYou`) **mais `mutualFollowersCount`** (inteiro): quantas das pessoas que **você** segue também seguem esse candidato.
+- **Ranqueamento — amigos-de-amigos**: os candidatos são as contas seguidas (follow aprovado) por alguém que você segue. Ordena por `mutualFollowersCount` desc; desempata por nº total de seguidores aprovados do candidato, depois pela conta mais recente, depois pelo `id` (ordem estável). Todo candidato dessa trilha tem `mutualFollowersCount >= 1`.
+- **Cold start** — se você **ainda não segue ninguém**, a lista cai para **popularidade global**: as contas com mais seguidores aprovados na plataforma, com `mutualFollowersCount = 0` em todas.
+- **Se você segue alguém mas a rede não rende nenhum candidato novo** (tudo que suas conexões seguem você já segue, ou é você, ou tem pedido pendente), a resposta é **lista vazia** — **não** cai para popularidade.
+- **`followState` é sempre `"none"`** aqui (quem você já segue ou tem pedido pendente está sempre excluído). `followsYou` pode ser `true` — quem já te segue e você ainda não segue de volta é um bom card.
+- **Exclusões**: você mesmo, quem você já segue (aprovado) e quem tem follow-request **pendente** seu. Um pedido **recusado** no passado **não** exclui — a pessoa pode voltar a aparecer (não existe "bloquear" no produto).
+- **Lista vazia é `200`** com `{ "items": [] }` (nunca `404`/`204`). O cliente esconde a seção quando vem vazia.
+- Único erro: `401`.
+
 ## `followState` / `followsYou` nas listagens
 
 `UserSearchResult` (`GET /users/search`), `FollowedUser` (`GET /me/followers` e `GET /me/following`) e `FollowRequestItem` (`GET /me/follow-requests`) passam a trazer `followState` e `followsYou` (mesma semântica de `GET /users/{userId}`), como campos **soltos** no item — o cliente não precisa mais cruzar `/me/following` + `/me/follow-requests` para montar o botão de follow de cada linha. Casos tautológicos: em `/me/following` `followState` é sempre `following`; em `/me/followers` `followsYou` é sempre `true`; em `follow-requests?direction=outgoing` `followState` é sempre `pending`.
@@ -62,4 +76,4 @@ Todos inteiros `>= 0`. Único erro: `401`.
 
 ## Erros específicos deste fluxo
 
-`CANNOT_FOLLOW_SELF`, `ALREADY_FOLLOWING`, `FOLLOW_REQUEST_NOT_FOUND`, `FOLLOW_NOT_FOUND`, `NOT_FOUND` (`:userId` do pedido não existe como usuário) — detalhes em `error-catalog.md`.
+`CANNOT_FOLLOW_SELF`, `ALREADY_FOLLOWING`, `FOLLOW_REQUEST_NOT_FOUND`, `FOLLOW_NOT_FOUND`, `NOT_FOUND` (`:userId` do pedido não existe como usuário) — detalhes em `error-catalog.md`. `GET /users/suggestions` só tem `UNAUTHENTICATED` (401).

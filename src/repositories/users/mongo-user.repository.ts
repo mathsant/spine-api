@@ -89,6 +89,15 @@ export class MongoUserRepository implements UserRepository {
     return doc ? toRecord(doc) : null;
   }
 
+  async findByIds(ids: string[]): Promise<UserRecord[]> {
+    const objectIds = ids.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
+    if (objectIds.length === 0) {
+      return [];
+    }
+    const docs = await this.users.find({ _id: { $in: objectIds } }).toArray();
+    return docs.map(toRecord);
+  }
+
   async updatePasswordHash(id: string, passwordHash: string, now: Date): Promise<void> {
     if (!ObjectId.isValid(id)) {
       return;

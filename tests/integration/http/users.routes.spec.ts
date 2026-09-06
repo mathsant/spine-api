@@ -23,6 +23,7 @@ describe('users routes (integration)', () => {
   let auth: string;
   let aliceId: string;
   let bobId: string;
+  let daveId: string;
 
   beforeAll(async () => {
     mongo = await startMongoMemory();
@@ -51,12 +52,32 @@ describe('users routes (integration)', () => {
     await users.updateProfile(bob.id, { bio: "Bob's private bio" }, new Date());
 
     // alice approve-follows bob; bob has one activity item
-    await new MongoFollowRepository(db).create(alice.id, bob.id, new Date());
+    const follows = new MongoFollowRepository(db);
+    await follows.create(alice.id, bob.id, new Date());
     const book = await new MongoBookRepository(db).upsertByOlid(aSearchResult());
     await new MongoActivityRepository(db).record(
       { type: 'started_reading', actorId: bob.id, bookId: book.id, readingSessionId: 's1' },
       new Date('2026-02-01T00:00:00.000Z'),
     );
+
+    // friends-of-friends suggestion graph: alice follows carol too; bob and carol both
+    // follow dave, so dave is a suggestion for alice with mutualFollowersCount 2.
+    const carol = await users.create({
+      email: 'carol@example.com',
+      passwordHash: 'scrypt$1$1$1$c2FsdA==$aGFzaA==',
+      handle: 'carol',
+      displayName: 'Carol',
+    });
+    const dave = await users.create({
+      email: 'dave@example.com',
+      passwordHash: 'scrypt$1$1$1$c2FsdA==$aGFzaA==',
+      handle: 'dave',
+      displayName: 'Dave',
+    });
+    daveId = dave.id;
+    await follows.create(alice.id, carol.id, new Date());
+    await follows.create(bob.id, dave.id, new Date());
+    await follows.create(carol.id, dave.id, new Date());
   });
 
   afterAll(async () => {
@@ -201,6 +222,48 @@ describe('users routes (integration)', () => {
   it('GET /v1/users/:userId/activity: 401 without Authorization', async () => {
     const app = await build();
     const res = await app.inject({ method: 'GET', url: `/v1/users/${bobId}/activity` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  // --- GET /v1/users/suggestions (012) ---
+
+  it('GET /v1/users/suggestions: 200 { items } ranked, avatarUrl null, followState none', async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/users/suggestions',
+      headers: { authorization: auth },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.items.length).toBeLessThanOrEqual(4);
+    const dave = body.items.find((i: { id: string }) => i.id === daveId);
+    expect(dave).toMatchObject({
+      handle: 'dave',
+      avatarUrl: null,
+      followState: 'none',
+      mutualFollowersCount: 2,
+    });
+    expect(body.items.some((i: { id: string }) => i.id === aliceId)).toBe(false);
+  });
+
+  it('GET /v1/users/suggestions: is not shadowed by /users/:userId', async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/users/suggestions',
+      headers: { authorization: auth },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).not.toHaveProperty('error');
+  });
+
+  it('GET /v1/users/suggestions: 401 without Authorization', async () => {
+    const app = await build();
+    const res = await app.inject({ method: 'GET', url: '/v1/users/suggestions' });
     expect(res.statusCode).toBe(401);
   });
 });

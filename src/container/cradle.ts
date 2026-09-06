@@ -54,7 +54,12 @@ import type {
 } from '../services/reading-sessions';
 import type { CreateReview, DeleteReview, EditReview } from '../services/reviews';
 import type { CreateReaction, DeleteReaction } from '../services/reactions';
-import type { GetUserProfile, ListUserActivity, SearchUsers } from '../services/users';
+import type {
+  GetFollowSuggestions,
+  GetUserProfile,
+  ListUserActivity,
+  SearchUsers,
+} from '../services/users';
 import type {
   ApproveFollowRequest,
   CancelFollowRequest,
@@ -122,6 +127,7 @@ export interface AppCradle {
   searchUsersService: SearchUsers;
   getUserProfileService: GetUserProfile;
   listUserActivityService: ListUserActivity;
+  getFollowSuggestionsService: GetFollowSuggestions;
   sendFollowRequestService: SendFollowRequest;
   cancelFollowRequestService: CancelFollowRequest;
   approveFollowRequestService: ApproveFollowRequest;

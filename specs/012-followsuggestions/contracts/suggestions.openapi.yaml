@@ -1,0 +1,106 @@
+openapi: 3.1.0
+info:
+  title: better-books API — delta da feature 012-followsuggestions
+  version: v1
+  description: >
+    Fragmento de contrato desta feature. A fonte única da verdade continua sendo
+    `docs/openapi.yaml`; o `/implement` aplica este delta lá (nova operação
+    `GET /users/suggestions` + schemas `FollowSuggestion` e `FollowSuggestionsResponse`,
+    tag `users`). Nada aqui altera operação ou schema existente.
+
+paths:
+  /users/suggestions:
+    get:
+      tags: [users]
+      operationId: getFollowSuggestions
+      summary: >
+        Até 4 contas para o usuário autenticado seguir, sem parâmetro de busca. Prioriza
+        quem é seguido por pessoas que você já segue (`mutualFollowersCount` = quantas
+        dessas pessoas seguem o candidato), do maior para o menor. Se você ainda não
+        segue ninguém, cai para as contas mais seguidas da plataforma
+        (`mutualFollowersCount` = 0). Exclui você, quem você já segue e quem tem
+        follow-request pendente seu. Um pedido recusado no passado não exclui. Lista
+        vazia é resposta normal (200) — o cliente esconde a seção.
+      responses:
+        "200":
+          description: Lista de sugestões (0 a 4 itens; vazia é normal).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowSuggestionsResponse" }
+              examples:
+                comRede:
+                  value:
+                    items:
+                      - id: "64b7f0c2e1a2b3c4d5e6f101"
+                        handle: "carla_reads"
+                        displayName: "Carla"
+                        avatarUrl: null
+                        followState: "none"
+                        followsYou: true
+                        mutualFollowersCount: 3
+                      - id: "64b7f0c2e1a2b3c4d5e6f102"
+                        handle: "dora"
+                        displayName: "Dora"
+                        avatarUrl: null
+                        followState: "none"
+                        followsYou: false
+                        mutualFollowersCount: 1
+                coldStart:
+                  value:
+                    items:
+                      - id: "64b7f0c2e1a2b3c4d5e6f201"
+                        handle: "populares"
+                        displayName: "Conta Popular"
+                        avatarUrl: null
+                        followState: "none"
+                        followsYou: false
+                        mutualFollowersCount: 0
+                vazia:
+                  value: { items: [] }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+components:
+  schemas:
+    FollowSuggestion:
+      type: object
+      additionalProperties: false
+      required: [id, handle, displayName, avatarUrl, followState, followsYou, mutualFollowersCount]
+      properties:
+        id: { type: string }
+        handle: { type: string }
+        displayName: { type: string }
+        avatarUrl:
+          type: [string, "null"]
+          description: "Sempre `null` por enquanto — upload de avatar ainda não existe na API."
+        followState:
+          type: string
+          enum: [none, pending, following]
+          description: >
+            Seu estado em relação a este usuário. Nesta rota é **sempre `none`** —
+            quem você já segue ou tem pedido pendente é excluído da lista. O campo
+            existe para o item ter o mesmo shape de `UserSearchResult`.
+        followsYou:
+          type: boolean
+          description: "`true` se este usuário já segue você (follow aprovado)."
+        mutualFollowersCount:
+          type: integer
+          minimum: 0
+          description: >
+            Quantas contas que **você segue** (follow aprovado) também seguem este
+            usuário. `≥ 1` quando a sugestão vem da sua rede; `0` quando a lista caiu
+            para popularidade global (você ainda não segue ninguém).
+
+    FollowSuggestionsResponse:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 4
+          items: { $ref: "#/components/schemas/FollowSuggestion" }
+
+  # Referenciado, já definido em docs/openapi.yaml:
+  responses:
+    Unauthenticated:
+      description: "Placeholder — ver components/responses/Unauthenticated em docs/openapi.yaml."

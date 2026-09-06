@@ -73,6 +73,23 @@ describe('MongoUserRepository (integration)', () => {
     expect(await repo.findById('not-an-object-id')).toBeNull();
   });
 
+  it('findByIds returns the records for the given ids, ignoring unknown and malformed ids', async () => {
+    const alice = await repo.create(input);
+    const bob = await repo.create({ ...input, email: 'bob@example.com', handle: 'bob' });
+
+    expect(await repo.findByIds([])).toEqual([]);
+
+    const found = await repo.findByIds([
+      bob.id,
+      alice.id,
+      '012345678901234567890123', // well-formed but unknown
+      'not-an-object-id', // malformed
+    ]);
+    expect(found.map((u) => u.id).sort()).toEqual([alice.id, bob.id].sort());
+
+    expect(await repo.findByIds(['not-an-object-id'])).toEqual([]);
+  });
+
   it('updates the password hash and bumps updatedAt', async () => {
     const created = await repo.create(input);
     const later = new Date(created.updatedAt.getTime() + 1000);

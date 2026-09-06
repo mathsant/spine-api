@@ -7,6 +7,7 @@ O feed é a lista de atividade — do próprio usuário e de quem ele segue com 
 1. **Buscar a página mais recente** — `GET /feed` (`getFeed`), sem `cursor`.
 2. **Paginar** — usar `nextCursor` da resposta anterior; ver `pagination-guide.md` para o mecanismo genérico de cursor.
 3. **Reagir/comentar em um item** — usar o `id` do item de feed como `activityId` nos endpoints de `interactions-flow.md`.
+4. **Sugestões de quem seguir** (trilho lateral do feed) — `GET /users/suggestions` (`getFollowSuggestions`), sem parâmetro; até 4 contas, lista vazia quando não há o que sugerir. Detalhes em `follow-flow.md`.
 
 ## Atividade de uma única pessoa
 

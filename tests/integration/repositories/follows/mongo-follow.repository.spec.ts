@@ -104,4 +104,97 @@ describe('MongoFollowRepository (integration)', () => {
     expect(await repo.countFollowing(followerId)).toBe(2);
     expect(await repo.countFollowers(followerId)).toBe(0);
   });
+
+  // --- follow-suggestion aggregations (012) ---
+
+  const a = '507f1f77bcf86cd799439021';
+  const b = '507f1f77bcf86cd799439022';
+  const carla = '507f1f77bcf86cd799439023';
+  const dora = '507f1f77bcf86cd799439024';
+
+  it('listFollowSuggestionCandidates counts distinct in-network followers per candidate; [] for empty input', async () => {
+    // a and b both follow carla; only a follows dora
+    await repo.create(a, carla, new Date());
+    await repo.create(b, carla, new Date());
+    await repo.create(a, dora, new Date());
+
+    expect(await repo.listFollowSuggestionCandidates([])).toEqual([]);
+
+    const candidates = await repo.listFollowSuggestionCandidates([a, b]);
+    const byUser = new Map(candidates.map((c) => [c.userId, c.mutualFollowersCount]));
+    expect(byUser.get(carla)).toBe(2);
+    expect(byUser.get(dora)).toBe(1);
+    expect(candidates).toHaveLength(2);
+  });
+
+  it('countFollowersByUser returns a Map of approved-follower counts; empty Map for empty input', async () => {
+    await repo.create(a, carla, new Date());
+    await repo.create(b, carla, new Date());
+    await repo.create(a, dora, new Date());
+
+    expect(await repo.countFollowersByUser([])).toEqual(new Map());
+
+    const counts = await repo.countFollowersByUser([carla, dora, b]);
+    expect(counts.get(carla)).toBe(2);
+    expect(counts.get(dora)).toBe(1);
+    expect(counts.has(b)).toBe(false);
+  });
+
+  it('listMostFollowedUsers ranks by follower count desc, applies limit and excludes ids', async () => {
+    // carla: 3 followers, dora: 2, b: 1
+    await repo.create(a, carla, new Date());
+    await repo.create(b, carla, new Date());
+    await repo.create(dora, carla, new Date());
+    await repo.create(a, dora, new Date());
+    await repo.create(b, dora, new Date());
+    await repo.create(a, b, new Date());
+
+    expect(await repo.listMostFollowedUsers(10, [])).toEqual([carla, dora, b]);
+    expect(await repo.listMostFollowedUsers(2, [])).toEqual([carla, dora]);
+    expect(await repo.listMostFollowedUsers(10, [carla])).toEqual([dora, b]);
+  });
+
+  it('the suggestion aggregations run on an index (no COLLSCAN)', async () => {
+    await repo.create(a, carla, new Date());
+    await repo.create(b, carla, new Date());
+
+    const plans = await Promise.all([
+      db
+        .collection('follows')
+        .aggregate(
+          [
+            { $match: { followerId: { $in: [a, b] } } },
+            { $group: { _id: '$followeeId', n: { $sum: 1 } } },
+          ],
+          { hint: 'follows_followerId_followeeId_unique' },
+        )
+        .explain(),
+      db
+        .collection('follows')
+        .aggregate(
+          [
+            { $match: { followeeId: { $in: [carla] } } },
+            { $group: { _id: '$followeeId', n: { $sum: 1 } } },
+          ],
+          { hint: 'follows_followeeId_followerId' },
+        )
+        .explain(),
+      db
+        .collection('follows')
+        .aggregate(
+          [
+            { $match: { followeeId: { $nin: [a] } } },
+            { $group: { _id: '$followeeId', n: { $sum: 1 } } },
+          ],
+          { hint: 'follows_followeeId_followerId' },
+        )
+        .explain(),
+    ]);
+
+    for (const plan of plans) {
+      const serialized = JSON.stringify(plan);
+      expect(serialized).not.toContain('COLLSCAN');
+      expect(serialized).toContain('IXSCAN');
+    }
+  });
 });

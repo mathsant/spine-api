@@ -73,6 +73,7 @@ describe('signup service (integration)', () => {
       findByEmail: async () => null,
       findByHandle: async () => null,
       findById: async () => null,
+      findByIds: async () => [],
       updatePasswordHash: async () => undefined,
       updateProfile: async () => {
         throw new Error('not used in this test');

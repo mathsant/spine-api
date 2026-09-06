@@ -52,4 +52,25 @@ export interface FollowRepository {
 
   /** Count of approved follows where `userId` is the follower (011, GET /me/stats). */
   countFollowing(userId: string): Promise<number>;
+
+  /**
+   * Friends-of-friends for follow suggestions (012): for every user followed by someone
+   * in `followeeIds`, how many of those `followeeIds` follow them. Empty `followeeIds`
+   * returns `[]` without touching the database. Index-only via the forward unique index.
+   */
+  listFollowSuggestionCandidates(
+    followeeIds: string[],
+  ): Promise<{ userId: string; mutualFollowersCount: number }[]>;
+
+  /**
+   * Approved-follower count per user in `userIds` (012, tie-breaker for suggestions).
+   * Users with zero followers are absent from the map. Empty input → empty map.
+   */
+  countFollowersByUser(userIds: string[]): Promise<Map<string, number>>;
+
+  /**
+   * Cold-start suggestions (012): user ids ordered by approved-follower count desc
+   * (then `_id` desc), capped at `limit`, excluding `excludeUserIds`. Index-only.
+   */
+  listMostFollowedUsers(limit: number, excludeUserIds: string[]): Promise<string[]>;
 }

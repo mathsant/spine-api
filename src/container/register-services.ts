@@ -13,7 +13,12 @@ import { makeResolveVisibleActivity } from '../services/activities';
 import { makeCreateComment, makeDeleteComment, makeListComments } from '../services/comments';
 import { makeGetHealth } from '../services/health';
 import { makeEditProfile, makeGetMyStats } from '../services/profile';
-import { makeGetUserProfile, makeListUserActivity, makeSearchUsers } from '../services/users';
+import {
+  makeGetFollowSuggestions,
+  makeGetUserProfile,
+  makeListUserActivity,
+  makeSearchUsers,
+} from '../services/users';
 import {
   makeApproveFollowRequest,
   makeCancelFollowRequest,
@@ -144,6 +149,13 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
         bookRepository: cradle.bookRepository,
         reviewRepository: cradle.reviewRepository,
         reactionRepository: cradle.reactionRepository,
+      }),
+    ).singleton(),
+    getFollowSuggestionsService: asFunction((cradle: AppCradle) =>
+      makeGetFollowSuggestions({
+        userRepository: cradle.userRepository,
+        followRepository: cradle.followRepository,
+        followRequestRepository: cradle.followRequestRepository,
       }),
     ).singleton(),
     sendFollowRequestService: asFunction((cradle: AppCradle) =>

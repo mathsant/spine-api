@@ -22,20 +22,20 @@ Contexto completo — glossário de domínio, decisões de produto travadas (P1�
 <!-- O bloco AUTO-GERADO é anexado abaixo na primeira vez que /plan rodar. -->
 
 <!-- SDD:AUTO-GERADO:INICIO -->
-<!-- Gerado automaticamente por update-agent-context.sh a partir de E:/projetos/better-books/specs/011-userconnectionscontractgaps/plan.md. -->
+<!-- Gerado automaticamente por update-agent-context.sh a partir de /Users/matheuscunha/Desktop/better-books/specs/012-followsuggestions/plan.md. -->
 <!-- Não edite esta seção manualmente; edite o plan.md e rode o script de novo. -->
 
-## Stack ativa (feature: 011-userconnectionscontractgaps)
+## Stack ativa (feature: 012-followsuggestions)
 
 
 **Linguagem/versão**: TypeScript ~5.9 (`strict`, `module: commonjs`, `target: es2016`) sobre Node.js v24. Sem mudança.
 **Dependências principais**: Fastify 5, Awilix (`@fastify/awilix`) para DI, driver nativo `mongodb`, `zod` 4. **Nenhuma dependência nova.**
-**Armazenamento**: MongoDB (driver nativo, sem ODM), migrations com `migrate-mongo`. Esta feature **não cria coleção** e **não faz migração de dados**; adiciona **1 índice** (1 migration).
-**Testes**: Vitest, dois *projects* (`unit` / `integration`). Regra de negócio → integração com `mongodb-memory-server` (sem mock de banco), ≥ 70% cobertura, caminho feliz + ≥1 erro. Funções puras (mappers, schemas zod) → unitário.
-**Plataforma-alvo**: servidor (API HTTP), consumida pelo app web da feature de front-end `004-userconnections` e por ferramentas OpenAPI.
+**Armazenamento**: MongoDB (driver nativo, sem ODM), migrations com `migrate-mongo`. Esta feature **não cria coleção**, **não altera schema** e **não adiciona índice** — só leitura sobre `follows`, `follow_requests`, `users`.
+**Testes**: Vitest, dois *projects* (`unit` / `integration`). O service (orquestra repositórios) → integração com `mongodb-memory-server` (sem mock de banco), ≥ 70% cobertura, caminho feliz + ≥ 1 erro. Comparador de ordenação e montagem de DTO (funções puras) → unitário.
+**Plataforma-alvo**: servidor (API HTTP), consumida pelo app web `spine-app` (feature de front-end `005-paginatedfeed`, seção "Pessoas para seguir" do trilho direito) e por ferramentas OpenAPI.
 **Tipo de projeto**: single (monolito backend em camadas `controller → service → repository`).
-**Metas de performance**: N/A explícito. RNF-001: as queries novas não podem fazer collection scan — ver research D4.
-**Restrições**: sem mudança em auth, em `follow-requests`/aprovação, nem no modelo persistido de `User`/`Follow`/`FollowRequest`/`Activity`/`Review`/`ReadingSession` (só consulta/serialização). `avatarUrl` continua sempre `null`. Nomes de arquivo/identificador em inglês; prosa dos artefatos SDD em português. Exemplos nos docs com dados fictícios.
-**Escala/escopo**: 3 endpoints novos (`GET /users/{userId}`, `GET /users/{userId}/activity`, `GET /me/stats`) + 4 campos novos em 3 schemas de lista. ~9 arquivos de service/controller/schema novos, ~10 arquivos existentes tocados, 6 métodos de repositório novos, 1 helper de feed extraído, 1 migration de índice, delta no `docs/openapi.yaml` + 2 guias de fluxo + catálogo de erros.
+**Metas de performance**: N/A explícito. RNF/DoD: as queries novas não podem fazer collection scan — ver research D3 (todas usam índice existente; a agregação de cold start é `IXSCAN` completo, não `COLLSCAN`).
+**Restrições**: sem mudança em auth, no fluxo de `follow-requests`/aprovação, nem no modelo persistido de `User`/`Follow`/`FollowRequest` (só consulta/serialização). `avatarUrl` sempre `null`. `followState` sempre `none` nesta rota. Sem paginação, sem `limit`, sem query param. "Dispensar sugestão" fora de escopo. Nomes de arquivo/identificador em inglês; prosa dos artefatos SDD em português. Exemplos com dados fictícios.
+**Escala/escopo**: 1 endpoint novo, 1 schema de resposta novo (`FollowSuggestion` + `FollowSuggestionsResponse`). ~4 arquivos novos (service, controller, 1 helper puro, testes), ~6 arquivos existentes tocados (2 interfaces + 2 impls de repositório, `users.routes.ts`, `services/users/index.ts` + `types.ts`, `register-services.ts`), delta no `docs/openapi.yaml` + nota nos guias de fluxo. Zero migration.
 
 <!-- SDD:AUTO-GERADO:FIM -->

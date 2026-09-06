@@ -50,6 +50,13 @@ export interface UserRepository {
   findByHandle(handle: string): Promise<UserRecord | null>;
   findById(id: string): Promise<UserRecord | null>;
 
+  /**
+   * Bulk lookup by id — unknown and malformed ids are silently skipped. Empty input
+   * returns `[]` without touching the database. Order is not guaranteed. Used to hydrate
+   * follow suggestions (012) without an N+1 of `findById`.
+   */
+  findByIds(ids: string[]): Promise<UserRecord[]>;
+
   /** Sets a new password hash and `updatedAt`. */
   updatePasswordHash(id: string, passwordHash: string, now: Date): Promise<void>;
 

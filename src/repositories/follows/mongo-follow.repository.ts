@@ -102,6 +102,62 @@ export class MongoFollowRepository implements FollowRepository {
     return this.follows.countDocuments({ followerId: userId });
   }
 
+  async listFollowSuggestionCandidates(
+    followeeIds: string[],
+  ): Promise<{ userId: string; mutualFollowersCount: number }[]> {
+    if (followeeIds.length === 0) {
+      return [];
+    }
+    const rows = await this.follows
+      .aggregate<{ _id: string; mutualFollowersCount: number }>(
+        [
+          { $match: { followerId: { $in: followeeIds } } },
+          { $group: { _id: '$followeeId', mutualFollowersCount: { $sum: 1 } } },
+        ],
+        { hint: 'follows_followerId_followeeId_unique' },
+      )
+      .toArray();
+    return rows.map((row) => ({
+      userId: row._id,
+      mutualFollowersCount: row.mutualFollowersCount,
+    }));
+  }
+
+  async countFollowersByUser(userIds: string[]): Promise<Map<string, number>> {
+    if (userIds.length === 0) {
+      return new Map();
+    }
+    const rows = await this.follows
+      .aggregate<{ _id: string; count: number }>(
+        [
+          { $match: { followeeId: { $in: userIds } } },
+          { $group: { _id: '$followeeId', count: { $sum: 1 } } },
+        ],
+        { hint: 'follows_followeeId_followerId' },
+      )
+      .toArray();
+    return new Map(rows.map((row) => [row._id, row.count]));
+  }
+
+  async listMostFollowedUsers(limit: number, excludeUserIds: string[]): Promise<string[]> {
+    const match =
+      excludeUserIds.length > 0
+        ? [{ $match: { followeeId: { $nin: excludeUserIds } } }]
+        : [];
+    const rows = await this.follows
+      .aggregate<{ _id: string }>(
+        [
+          ...match,
+          { $group: { _id: '$followeeId', count: { $sum: 1 } } },
+          { $sort: { count: -1, _id: -1 } },
+          { $limit: limit },
+        ],
+        { hint: 'follows_followeeId_followerId' },
+      )
+      .toArray();
+    return rows.map((row) => row._id);
+  }
+
   private async listByField(
     field: 'followeeId' | 'followerId',
     value: string,
