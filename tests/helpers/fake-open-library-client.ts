@@ -57,6 +57,7 @@ export function aSearchResult(overrides: Partial<OpenLibrarySearchResult> = {}):
     authors: ['Frank Herbert'],
     coverUrl: 'https://covers.openlibrary.org/b/id/999-M.jpg',
     firstPublishYear: 1965,
+    pageCount: 412,
     ...overrides,
   };
 }

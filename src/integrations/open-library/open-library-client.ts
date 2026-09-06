@@ -8,6 +8,8 @@ export interface OpenLibrarySearchResult {
   /** Resolved from `cover_i`, e.g. `https://covers.openlibrary.org/b/id/<cover_i>-M.jpg`. */
   coverUrl: string | null;
   firstPublishYear: number | null;
+  /** From Open Library's `number_of_pages_median` (work-level median). `null` when absent. */
+  pageCount: number | null;
 }
 
 export interface OpenLibrarySearchPage {

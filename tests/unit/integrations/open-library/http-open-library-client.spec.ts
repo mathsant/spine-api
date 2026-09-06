@@ -53,6 +53,7 @@ describe('HttpOpenLibraryClient', () => {
             author_name: ['Frank Herbert'],
             cover_i: 999,
             first_publish_year: 1965,
+            number_of_pages_median: 412,
             isbn: ['0441013597', '9780441013593'],
           },
         ],
@@ -72,6 +73,7 @@ describe('HttpOpenLibraryClient', () => {
           authors: ['Frank Herbert'],
           coverUrl: 'https://covers.openlibrary.org/b/id/999-M.jpg',
           firstPublishYear: 1965,
+          pageCount: 412,
         },
       ],
       page: 1,
@@ -97,6 +99,7 @@ describe('HttpOpenLibraryClient', () => {
       authors: [],
       coverUrl: null,
       firstPublishYear: null,
+      pageCount: null,
     });
   });
 

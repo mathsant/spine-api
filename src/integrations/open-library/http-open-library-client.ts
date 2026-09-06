@@ -16,6 +16,7 @@ interface OpenLibraryDoc {
   author_name?: string[];
   cover_i?: number;
   first_publish_year?: number;
+  number_of_pages_median?: number;
   isbn?: string[];
 }
 
@@ -36,6 +37,7 @@ function toResult(doc: OpenLibraryDoc): OpenLibrarySearchResult {
     authors: doc.author_name ?? [],
     coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : null,
     firstPublishYear: doc.first_publish_year ?? null,
+    pageCount: doc.number_of_pages_median ?? null,
   };
 }
 

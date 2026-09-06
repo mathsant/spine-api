@@ -27,6 +27,7 @@ function toDTO(book: BookRecord, reviewAggregates: ReviewAggregates, readerCount
     authors: book.authors,
     coverUrl: book.coverUrl,
     firstPublishYear: book.firstPublishYear,
+    pageCount: book.pageCount,
     aggregates: {
       averageRating: reviewAggregates.averageRating,
       reviewCount: reviewAggregates.reviewCount,

@@ -20,6 +20,19 @@ describe('search-books service (integration)', () => {
     });
   });
 
+  it('carries pageCount through each item (value and null)', async () => {
+    const openLibraryClient = new FakeOpenLibraryClient();
+    openLibraryClient.seed(aSearchResult({ olid: 'OL_PAGES_W', title: 'com paginas', pageCount: 320 }));
+    openLibraryClient.seed(aSearchResult({ olid: 'OL_NO_PAGES_W', title: 'sem paginas', pageCount: null }));
+    const searchBooks = makeSearchBooks({ openLibraryClient });
+
+    const withPages = await searchBooks({ q: 'com paginas', page: 1, limit: 20 });
+    const withoutPages = await searchBooks({ q: 'sem paginas', page: 1, limit: 20 });
+
+    expect(withPages.items[0].pageCount).toBe(320);
+    expect(withoutPages.items[0].pageCount).toBeNull();
+  });
+
   it('propagates OpenLibraryUnavailableError from the client', async () => {
     const openLibraryClient = new FakeOpenLibraryClient();
     openLibraryClient.simulateOutage();

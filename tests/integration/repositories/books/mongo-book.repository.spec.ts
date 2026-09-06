@@ -12,6 +12,7 @@ const input = {
   authors: ['Frank Herbert'],
   coverUrl: 'https://covers.openlibrary.org/b/id/999-M.jpg',
   firstPublishYear: 1965,
+  pageCount: 412,
 };
 
 describe('MongoBookRepository (integration)', () => {
@@ -67,6 +68,39 @@ describe('MongoBookRepository (integration)', () => {
 
   it('returns null for a malformed id rather than throwing', async () => {
     expect(await repo.findById('not-an-object-id')).toBeNull();
+  });
+
+  it('persists pageCount and writes null when Open Library has none', async () => {
+    const withCount = await repo.upsertByOlid({
+      ...input,
+      olid: 'OL_PAGES_W',
+      isbn13: null,
+      pageCount: 320,
+    });
+    expect(withCount.pageCount).toBe(320);
+
+    const withoutCount = await repo.upsertByOlid({
+      ...input,
+      olid: 'OL_NO_PAGES_W',
+      isbn13: null,
+      pageCount: null,
+    });
+    expect(withoutCount.pageCount).toBeNull();
+  });
+
+  it('surfaces pageCount as null for a document cached before the field existed', async () => {
+    await db.collection('books').insertOne({
+      olid: 'OL_LEGACY_W',
+      title: 'Legado',
+      authors: [],
+      coverUrl: null,
+      firstPublishYear: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const found = await repo.findByOlid('OL_LEGACY_W');
+    expect(found?.pageCount).toBeNull();
   });
 
   it('accepts a book with no isbn13 (sparse unique index)', async () => {

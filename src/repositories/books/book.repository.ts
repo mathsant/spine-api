@@ -7,6 +7,9 @@ export interface BookRecord {
   authors: string[];
   coverUrl: string | null;
   firstPublishYear: number | null;
+  /** Median page count from Open Library. `null` when Open Library has none, or when
+   * the book was cached before this field existed and has not been re-resolved. */
+  pageCount: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,6 +22,7 @@ export interface UpsertBookInput {
   authors: string[];
   coverUrl: string | null;
   firstPublishYear: number | null;
+  pageCount: number | null;
 }
 
 /** Data-access port for the `books` collection. Only implementations touch the driver. */

@@ -54,7 +54,25 @@ describe('list-want-to-read service (integration)', () => {
     const page = await listWantToRead({ userId, cursor: null, limit: 20 });
 
     expect(page.items.map((item) => item.olid)).toEqual(['OL_B_W', 'OL_A_W']);
+    expect(page.items.map((item) => item.pageCount)).toEqual([412, 412]);
     expect(page.nextCursor).toBeNull();
+  });
+
+  it('carries pageCount as null for a book cached before the field existed', async () => {
+    await db.collection('books').insertOne({
+      olid: 'OL_LEGACY_W',
+      title: 'Legado',
+      authors: [],
+      coverUrl: null,
+      firstPublishYear: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const legacy = await bookRepository.findByOlid('OL_LEGACY_W');
+    await shelfMembershipRepository.add(userId, legacy!.id);
+
+    const page = await listWantToRead({ userId, cursor: null, limit: 20 });
+    expect(page.items[0].pageCount).toBeNull();
   });
 
   it('paginates with a cursor when there are more items than the limit', async () => {

@@ -60,6 +60,28 @@ describe('get-book service (integration)', () => {
     expect(cached).not.toBeNull();
   });
 
+  it('exposes pageCount from Open Library, and null when it has none', async () => {
+    openLibraryClient.seed(aSearchResult({ olid: 'OL_PAGES_W', pageCount: 320 }));
+    openLibraryClient.seed(aSearchResult({ olid: 'OL_NO_PAGES_W', isbn13: null, pageCount: null }));
+
+    expect((await getBook({ olid: 'OL_PAGES_W' })).pageCount).toBe(320);
+    expect((await getBook({ olid: 'OL_NO_PAGES_W' })).pageCount).toBeNull();
+  });
+
+  it('surfaces pageCount as null for a book cached before the field existed', async () => {
+    await db.collection('books').insertOne({
+      olid: 'OL_LEGACY_W',
+      title: 'Legado',
+      authors: [],
+      coverUrl: null,
+      firstPublishYear: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    expect((await getBook({ olid: 'OL_LEGACY_W' })).pageCount).toBeNull();
+  });
+
   it('throws BookNotFoundError when the client finds nothing', async () => {
     await expect(getBook({ olid: 'OL_GHOST_W' })).rejects.toBeInstanceOf(BookNotFoundError);
   });

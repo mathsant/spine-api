@@ -10,6 +10,7 @@ interface BookDocument {
   authors: string[];
   coverUrl: string | null;
   firstPublishYear: number | null;
+  pageCount?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +24,7 @@ function toRecord(doc: BookDocument): BookRecord {
     authors: doc.authors,
     coverUrl: doc.coverUrl,
     firstPublishYear: doc.firstPublishYear,
+    pageCount: doc.pageCount ?? null,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -64,6 +66,7 @@ export class MongoBookRepository implements BookRepository {
           authors: input.authors,
           coverUrl: input.coverUrl,
           firstPublishYear: input.firstPublishYear,
+          pageCount: input.pageCount,
           updatedAt: now,
         },
         ...(input.isbn13 === null ? { $unset: { isbn13: '' as const } } : {}),

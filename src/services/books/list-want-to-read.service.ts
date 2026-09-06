@@ -22,6 +22,7 @@ function toResultDTO(book: {
   authors: string[];
   coverUrl: string | null;
   firstPublishYear: number | null;
+  pageCount: number | null;
 }): BookSearchResultDTO {
   return {
     olid: book.olid,
@@ -30,6 +31,7 @@ function toResultDTO(book: {
     authors: book.authors,
     coverUrl: book.coverUrl,
     firstPublishYear: book.firstPublishYear,
+    pageCount: book.pageCount,
   };
 }
 

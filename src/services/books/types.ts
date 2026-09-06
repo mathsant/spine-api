@@ -5,6 +5,7 @@ export interface BookSearchResultDTO {
   authors: string[];
   coverUrl: string | null;
   firstPublishYear: number | null;
+  pageCount: number | null;
 }
 
 export interface BookSearchPageDTO {
