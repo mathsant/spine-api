@@ -1,11 +1,13 @@
 import type { Db } from 'mongodb';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MongoBookRepository } from '../../../../src/repositories/books';
 import { MongoReadingSessionRepository } from '../../../../src/repositories/reading-sessions';
 import { MongoReviewRepository } from '../../../../src/repositories/reviews';
 import { makeListReadingSessions } from '../../../../src/services/reading-sessions';
 import { ensureBookIndexes } from '../../../helpers/book-indexes';
 import { ensureReviewIndexes } from '../../../helpers/review-indexes';
+import { aSearchResult } from '../../../helpers/fake-open-library-client';
 import { type MongoMemory, startMongoMemory } from '../../../helpers/mongo-memory';
 
 const userId = '507f1f77bcf86cd799439011';
@@ -17,6 +19,7 @@ describe('list-reading-sessions service (integration)', () => {
   let db: Db;
   let readingSessionRepository: MongoReadingSessionRepository;
   let reviewRepository: MongoReviewRepository;
+  let bookRepository: MongoBookRepository;
   let listReadingSessions: ReturnType<typeof makeListReadingSessions>;
 
   beforeAll(async () => {
@@ -33,9 +36,15 @@ describe('list-reading-sessions service (integration)', () => {
   beforeEach(async () => {
     await db.collection('reading_sessions').deleteMany({});
     await db.collection('reviews').deleteMany({});
+    await db.collection('books').deleteMany({});
     readingSessionRepository = new MongoReadingSessionRepository(db);
     reviewRepository = new MongoReviewRepository(db);
-    listReadingSessions = makeListReadingSessions({ readingSessionRepository, reviewRepository });
+    bookRepository = new MongoBookRepository(db);
+    listReadingSessions = makeListReadingSessions({
+      readingSessionRepository,
+      reviewRepository,
+      bookRepository,
+    });
   });
 
   it('paginates the history across all statuses and books', async () => {
@@ -153,6 +162,47 @@ describe('list-reading-sessions service (integration)', () => {
       }
       expect(seen).toHaveLength(4);
       expect(new Set(seen).size).toBe(4);
+    });
+  });
+
+  describe('embedded book summary (feature 010)', () => {
+    it('embeds a book summary in every item (RF-028)', async () => {
+      const book = await bookRepository.upsertByOlid(
+        aSearchResult({ olid: 'OL_HIST_W', isbn13: null, title: 'Historia', pageCount: 275 }),
+      );
+      await readingSessionRepository.createFinished(userId, book.id, {
+        startedAt: null,
+        finishedAt: new Date(),
+      });
+
+      const page = await listReadingSessions({ userId, cursor: null, limit: 20 });
+
+      expect(page.items[0].book).toEqual({
+        title: 'Historia',
+        authors: book.authors,
+        coverUrl: book.coverUrl,
+        pageCount: 275,
+      });
+    });
+
+    it('resolves books in a single batch, not one query per item (RF-030)', async () => {
+      const book = await bookRepository.upsertByOlid(
+        aSearchResult({ olid: 'OL_BATCH_W', isbn13: null, title: 'Batch' }),
+      );
+      await readingSessionRepository.createFinished(userId, book.id, {
+        startedAt: null,
+        finishedAt: new Date('2024-01-01T00:00:00.000Z'),
+      });
+      await readingSessionRepository.createFinished(userId, book.id, {
+        startedAt: null,
+        finishedAt: new Date('2025-01-01T00:00:00.000Z'),
+      });
+
+      const findById = vi.spyOn(bookRepository, 'findById');
+      await listReadingSessions({ userId, cursor: null, limit: 20 });
+
+      // two sessions of the same book -> one lookup
+      expect(findById).toHaveBeenCalledTimes(1);
     });
   });
 });

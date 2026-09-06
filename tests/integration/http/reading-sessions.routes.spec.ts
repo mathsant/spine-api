@@ -104,6 +104,16 @@ describe('reading-sessions routes (integration)', () => {
     expect(second.sessionId).toBe(first.sessionId);
   });
 
+  it('start-reading response carries no embedded book (only the listing does — RF-029)', async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/books/OL_STUB_W/start-reading',
+      headers: { authorization: auth },
+    });
+    expect(res.json()).not.toHaveProperty('book');
+  });
+
   // ---- progress --------------------------------------------------------
 
   it('progress: 200 while reading, 409 once finished', async () => {
@@ -299,6 +309,11 @@ describe('reading-sessions routes (integration)', () => {
     });
     expect(history.statusCode).toBe(200);
     expect(history.json().items).toHaveLength(2);
+    expect(history.json().items[0].book).toMatchObject({
+      title: 'Stub Book',
+      authors: ['Stub Author'],
+    });
+    expect(history.json().items[0].book).toHaveProperty('pageCount');
 
     const limited = await app.inject({
       method: 'GET',

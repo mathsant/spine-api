@@ -95,16 +95,16 @@ Caminhos seguem a tabela "Onde cada tipo de código novo deve ir" de `.specify/m
 ## Fase F5 — `book` embutido no histórico
 
 ### Testes primeiro
-- [ ] **T045** [P] `tests/unit/services/reading-sessions/to-dto.spec.ts`: o mapper do item de listagem produz `book { title, authors, coverUrl, pageCount }`; as respostas não-listagem não têm `book`.
-- [ ] **T046** Estender `tests/integration/services/reading-sessions/list-reading-sessions.service.spec.ts`: cada item traz `book` resolvido do `bookRepository`; batch-load (nº de chamadas ao `bookRepository.findById` proporcional a livros distintos da página, não a itens — RF-030).
-- [ ] **T047** Estender `tests/integration/http/reading-sessions.routes.spec.ts`: a listagem traz `book`; `POST /books/:olid/start-reading`, `POST /reading-sessions/:id/progress`, `POST /reading-sessions/:id/finish`, `PATCH /reading-sessions/:id`, `POST /books/:olid/mark-finished` **não** trazem `book` (RF-029).
+- [x] **T045** [P] `tests/unit/services/reading-sessions/to-dto.spec.ts`: o mapper do item de listagem produz `book { title, authors, coverUrl, pageCount }`; as respostas não-listagem não têm `book`.
+- [x] **T046** Estender `tests/integration/services/reading-sessions/list-reading-sessions.service.spec.ts`: cada item traz `book` resolvido do `bookRepository`; batch-load (nº de chamadas ao `bookRepository.findById` proporcional a livros distintos da página, não a itens — RF-030).
+- [x] **T047** Estender `tests/integration/http/reading-sessions.routes.spec.ts`: a listagem traz `book`; `POST /books/:olid/start-reading`, `POST /reading-sessions/:id/progress`, `POST /reading-sessions/:id/finish`, `PATCH /reading-sessions/:id`, `POST /books/:olid/mark-finished` **não** trazem `book` (RF-029).
 
 ### Implementação
-- [ ] **T048** `src/services/reading-sessions/types.ts`: `ReadingSessionBookDTO { title; authors; coverUrl; pageCount }`; `ReadingSessionListItemDTO = ReadingSessionDTO & { book: ReadingSessionBookDTO }` e `ReadingSessionListCursorPageDTO`. Manter `ReadingSessionDTO` sem `book` para as demais respostas.
-- [ ] **T049** `src/services/reading-sessions/to-dto.ts`: adicionar `toReadingSessionListItemDTO(record, review, book)` (reusa `toReadingSessionDTO` e acopla `book`); não alterar a assinatura de `toReadingSessionDTO`.
-- [ ] **T050** `src/services/reading-sessions/list-reading-sessions.service.ts`: após obter a página, `bookRepository.findById` em lote pelos `bookId` distintos; mapear cada item com `toReadingSessionListItemDTO`; tipo de retorno `ReadingSessionListCursorPageDTO`.
-- [ ] **T051** `src/services/reading-sessions/index.ts`: re-export dos tipos novos.
-- [ ] **T052** Rodar `pnpm test` reading-sessions + `pnpm typecheck`; T045–T047 passam.
+- [x] **T048** `src/services/reading-sessions/types.ts`: `ReadingSessionBookDTO { title; authors; coverUrl; pageCount }`; `ReadingSessionListItemDTO = ReadingSessionDTO & { book: ReadingSessionBookDTO }` e `ReadingSessionListCursorPageDTO`. Manter `ReadingSessionDTO` sem `book` para as demais respostas.
+- [x] **T049** `src/services/reading-sessions/to-dto.ts`: adicionar `toReadingSessionListItemDTO(record, review, book)` (reusa `toReadingSessionDTO` e acopla `book`); não alterar a assinatura de `toReadingSessionDTO`.
+- [x] **T050** `src/services/reading-sessions/list-reading-sessions.service.ts`: após obter a página, `bookRepository.findById` em lote pelos `bookId` distintos; mapear cada item com `toReadingSessionListItemDTO`; tipo de retorno `ReadingSessionListCursorPageDTO`.
+- [x] **T051** `src/services/reading-sessions/index.ts`: re-export dos tipos novos.
+- [x] **T052** Rodar `pnpm test` reading-sessions + `pnpm typecheck`; T045–T047 passam.
 
 ---
 

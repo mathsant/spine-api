@@ -33,5 +33,11 @@ export type {
   ListReadingSessionsDeps,
   ListReadingSessionsInput,
 } from './list-reading-sessions.service';
-export { toReadingSessionDTO } from './to-dto';
-export type { ReadingSessionDTO, ReadingSessionCursorPageDTO } from './types';
+export { toReadingSessionDTO, toReadingSessionListItemDTO } from './to-dto';
+export type {
+  ReadingSessionDTO,
+  ReadingSessionCursorPageDTO,
+  ReadingSessionBookDTO,
+  ReadingSessionListItemDTO,
+  ReadingSessionListCursorPageDTO,
+} from './types';

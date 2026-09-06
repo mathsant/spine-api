@@ -258,6 +258,7 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
       makeListReadingSessions({
         readingSessionRepository: cradle.readingSessionRepository,
         reviewRepository: cradle.reviewRepository,
+        bookRepository: cradle.bookRepository,
       }),
     ).singleton(),
     createReviewService: asFunction((cradle: AppCradle) =>
