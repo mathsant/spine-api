@@ -198,6 +198,26 @@ export class MongoReadingSessionRepository implements ReadingSessionRepository {
     return readers.length;
   }
 
+  async findLatestFinishedPerUserForBook(
+    bookId: string,
+    userIds: string[],
+  ): Promise<ReadingSessionRecord[]> {
+    if (userIds.length === 0) {
+      return [];
+    }
+
+    const docs = await this.sessions
+      .aggregate<ReadingSessionDocument>([
+        { $match: { bookId, status: 'finished', userId: { $in: userIds } } },
+        { $sort: { finishedAt: -1, createdAt: -1, _id: -1 } },
+        { $group: { _id: '$userId', doc: { $first: '$$ROOT' } } },
+        { $replaceRoot: { newRoot: '$doc' } },
+      ])
+      .toArray();
+
+    return docs.map(toRecord);
+  }
+
   private async requireDoc(sessionId: string): Promise<ReadingSessionDocument> {
     if (!ObjectId.isValid(sessionId)) {
       throw new ReadingSessionNotFoundError();

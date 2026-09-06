@@ -14,9 +14,18 @@ export type {
 } from './unmark-want-to-read.service';
 export { makeListWantToRead } from './list-want-to-read.service';
 export type { ListWantToRead, ListWantToReadDeps, ListWantToReadInput } from './list-want-to-read.service';
+export { makeListBookReviews } from './list-book-reviews.service';
+export type {
+  ListBookReviews,
+  ListBookReviewsDeps,
+  ListBookReviewsInput,
+} from './list-book-reviews.service';
 export type {
   BookSearchResultDTO,
   BookSearchPageDTO,
   BookDetailDTO,
   BookCursorPageDTO,
+  BookReviewAuthorDTO,
+  BookReviewByFollowingDTO,
+  BookReviewByFollowingCursorPageDTO,
 } from './types';

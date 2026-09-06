@@ -61,4 +61,15 @@ export interface ReadingSessionRepository {
 
   /** Distinct `userId`s with at least one `finished` session of this book. */
   countDistinctFinishedReaders(bookId: string): Promise<number>;
+
+  /**
+   * At most one record per `userId` in `userIds`: that user's most recent `finished`
+   * session of `bookId` (by `finishedAt`, then `createdAt`, then `_id`). Empty
+   * `userIds` returns `[]` without touching the database. Used by
+   * `GET /books/:olid/reviews` (feature 010).
+   */
+  findLatestFinishedPerUserForBook(
+    bookId: string,
+    userIds: string[],
+  ): Promise<ReadingSessionRecord[]>;
 }

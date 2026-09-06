@@ -53,22 +53,22 @@ Caminhos seguem a tabela "Onde cada tipo de código novo deve ir" de `.specify/m
 ## Fase F3 — `GET /books/{olid}/reviews`
 
 ### Testes primeiro
-- [ ] **T019** [P] `tests/unit/schemas/books/list-book-reviews.schema.spec.ts`: `cursor` opcional (string ≥1), `limit` com default e limites min/max.
-- [ ] **T020** [P] Estender `tests/integration/repositories/reading-sessions/mongo-reading-session.repository.spec.ts`: `findLatestFinishedPerUserForBook` devolve no máximo 1 registro por `userId` (a session `finished` mais recente), ignora `reading`, `userIds` vazio → `[]` sem tocar o banco.
-- [ ] **T021** `tests/integration/services/books/list-book-reviews.service.spec.ts`: cenários de aceitação 4–10 da spec (RF-006..012) — inclui seguido com releitura (1 review), review própria ausente, usuário não-seguido/pending ausente (**DoD P6**), `olid` inexistente → `BookNotFoundError`, livro sem reviews de seguidos → página vazia, paginação por cursor sem repetição/omissão.
-- [ ] **T022** Estender `tests/integration/http/books.routes.spec.ts`: `GET /v1/books/:olid/reviews` → 200 (forma do item: `reviewId`, `author{userId,handle,displayName,avatarUrl:null}`, `rating`, `text`, `containsSpoiler`, `createdAt`), 401 sem token, 404 `BOOK_NOT_FOUND`.
+- [x] **T019** [P] `tests/unit/schemas/books/list-book-reviews.schema.spec.ts`: `cursor` opcional (string ≥1), `limit` com default e limites min/max.
+- [x] **T020** [P] Estender `tests/integration/repositories/reading-sessions/mongo-reading-session.repository.spec.ts`: `findLatestFinishedPerUserForBook` devolve no máximo 1 registro por `userId` (a session `finished` mais recente), ignora `reading`, `userIds` vazio → `[]` sem tocar o banco.
+- [x] **T021** `tests/integration/services/books/list-book-reviews.service.spec.ts`: cenários de aceitação 4–10 da spec (RF-006..012) — inclui seguido com releitura (1 review), review própria ausente, usuário não-seguido/pending ausente (**DoD P6**), `olid` inexistente → `BookNotFoundError`, livro sem reviews de seguidos → página vazia, paginação por cursor sem repetição/omissão.
+- [x] **T022** Estender `tests/integration/http/books.routes.spec.ts`: `GET /v1/books/:olid/reviews` → 200 (forma do item: `reviewId`, `author{userId,handle,displayName,avatarUrl:null}`, `rating`, `text`, `containsSpoiler`, `createdAt`), 401 sem token, 404 `BOOK_NOT_FOUND`.
 
 ### Implementação
-- [ ] **T023** `src/schemas/books/list-book-reviews.schema.ts`: `listBookReviewsSchema` (`cursor?`, `limit` default 20, max 50); export em `src/schemas/books/index.ts`.
-- [ ] **T024** `src/repositories/reading-sessions/reading-session.repository.ts`: assinatura `findLatestFinishedPerUserForBook(bookId: string, userIds: string[]): Promise<ReadingSessionRecord[]>`.
-- [ ] **T025** `src/repositories/reading-sessions/mongo-reading-session.repository.ts`: implementar com aggregation `$match {bookId,status:'finished',userId:{$in}}` → `$sort {finishedAt:-1,createdAt:-1,_id:-1}` → `$group {_id:'$userId', doc:{$first:'$$ROOT'}}`; `userIds` vazio → `[]`.
-- [ ] **T026** `src/services/books/types.ts`: `BookReviewByFollowingDTO` (`reviewId`, `author{userId,handle,displayName,avatarUrl}`, `rating`, `text`, `containsSpoiler`, `createdAt`) e `BookReviewByFollowingCursorPageDTO`.
-- [ ] **T027** `src/services/books/list-book-reviews.service.ts`: `makeListBookReviews({ bookRepository, openLibraryClient, followRepository, readingSessionRepository, reviewRepository, userRepository })` — `resolveBook` (404), `followRepository.listFolloweeIds`, `findLatestFinishedPerUserForBook`, `reviewRepository.findBySessionIds`, descartar sessions sem review, `userRepository.findById` em batch, ordenar por `createdAt` da review desc, aplicar cursor `{createdAt,id}` (`encodeCursor`/`decodeCursor` existentes) e `limit+1`.
-- [ ] **T028** `src/services/books/index.ts`: re-export de `makeListBookReviews` e tipos.
-- [ ] **T029** `src/controllers/books/list-book-reviews.controller.ts`: handler — valida query com `listBookReviewsSchema`, exige `currentUser`, resolve `listBookReviewsByFollowingService`, `reply.status(200)`.
-- [ ] **T030** `src/controllers/books/books.routes.ts`: `app.get('/books/:olid/reviews', { preHandler: app.authenticate }, listBookReviewsController)`; re-export em `src/controllers/books/index.ts` se necessário.
-- [ ] **T031** `src/container/register-services.ts`: registrar `listBookReviewsByFollowingService` com as 6 deps do cradle.
-- [ ] **T032** Rodar `pnpm test` das trilhas books/reading-sessions + `pnpm typecheck`; T019–T022 passam.
+- [x] **T023** `src/schemas/books/list-book-reviews.schema.ts`: `listBookReviewsSchema` (`cursor?`, `limit` default 20, max 50); export em `src/schemas/books/index.ts`.
+- [x] **T024** `src/repositories/reading-sessions/reading-session.repository.ts`: assinatura `findLatestFinishedPerUserForBook(bookId: string, userIds: string[]): Promise<ReadingSessionRecord[]>`.
+- [x] **T025** `src/repositories/reading-sessions/mongo-reading-session.repository.ts`: implementar com aggregation `$match {bookId,status:'finished',userId:{$in}}` → `$sort {finishedAt:-1,createdAt:-1,_id:-1}` → `$group {_id:'$userId', doc:{$first:'$$ROOT'}}`; `userIds` vazio → `[]`.
+- [x] **T026** `src/services/books/types.ts`: `BookReviewByFollowingDTO` (`reviewId`, `author{userId,handle,displayName,avatarUrl}`, `rating`, `text`, `containsSpoiler`, `createdAt`) e `BookReviewByFollowingCursorPageDTO`.
+- [x] **T027** `src/services/books/list-book-reviews.service.ts`: `makeListBookReviews({ bookRepository, openLibraryClient, followRepository, readingSessionRepository, reviewRepository, userRepository })` — `resolveBook` (404), `followRepository.listFolloweeIds`, `findLatestFinishedPerUserForBook`, `reviewRepository.findBySessionIds`, descartar sessions sem review, `userRepository.findById` em batch, ordenar por `createdAt` da review desc, aplicar cursor `{createdAt,id}` (`encodeCursor`/`decodeCursor` existentes) e `limit+1`.
+- [x] **T028** `src/services/books/index.ts`: re-export de `makeListBookReviews` e tipos.
+- [x] **T029** `src/controllers/books/list-book-reviews.controller.ts`: handler — valida query com `listBookReviewsSchema`, exige `currentUser`, resolve `listBookReviewsByFollowingService`, `reply.status(200)`.
+- [x] **T030** `src/controllers/books/books.routes.ts`: `app.get('/books/:olid/reviews', { preHandler: app.authenticate }, listBookReviewsController)`; re-export em `src/controllers/books/index.ts` se necessário.
+- [x] **T031** `src/container/register-services.ts`: registrar `listBookReviewsByFollowingService` com as 6 deps do cradle.
+- [x] **T032** Rodar `pnpm test` das trilhas books/reading-sessions + `pnpm typecheck`; T019–T022 passam.
 
 ---
 

@@ -22,7 +22,14 @@ import type {
   Refresh,
   Signup,
 } from '../services/auth';
-import type { GetBook, ListWantToRead, MarkWantToRead, SearchBooks, UnmarkWantToRead } from '../services/books';
+import type {
+  GetBook,
+  ListBookReviews,
+  ListWantToRead,
+  MarkWantToRead,
+  SearchBooks,
+  UnmarkWantToRead,
+} from '../services/books';
 import type { ResolveVisibleActivity } from '../services/activities';
 import type { CreateComment, DeleteComment, ListComments } from '../services/comments';
 import type { GetFeed } from '../services/feed';
@@ -101,6 +108,7 @@ export interface AppCradle {
   markWantToReadService: MarkWantToRead;
   unmarkWantToReadService: UnmarkWantToRead;
   listWantToReadService: ListWantToRead;
+  listBookReviewsService: ListBookReviews;
   startReadingService: StartReading;
   markFinishedService: MarkFinished;
   updateProgressService: UpdateProgress;

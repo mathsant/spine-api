@@ -4,3 +4,5 @@ export { listWantToReadSchema } from './list-want-to-read.schema';
 export type { ListWantToReadInput } from './list-want-to-read.schema';
 export { markFinishedSchema } from './mark-finished.schema';
 export type { MarkFinishedInput } from './mark-finished.schema';
+export { listBookReviewsSchema } from './list-book-reviews.schema';
+export type { ListBookReviewsInput } from './list-book-reviews.schema';

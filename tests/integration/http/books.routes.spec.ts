@@ -4,9 +4,15 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { signAccessToken } from '../../../src/auth';
 import { buildApp } from '../../../src/app';
 import type { AppConfig } from '../../../src/config';
+import { MongoBookRepository } from '../../../src/repositories/books';
+import { MongoFollowRepository } from '../../../src/repositories/follows';
+import { MongoReadingSessionRepository } from '../../../src/repositories/reading-sessions';
+import { MongoReviewRepository } from '../../../src/repositories/reviews';
 import { MongoUserRepository } from '../../../src/repositories/users';
 import { ensureAuthIndexes } from '../../helpers/auth-indexes';
 import { ensureBookIndexes } from '../../helpers/book-indexes';
+import { ensureFollowIndexes } from '../../helpers/follow-indexes';
+import { ensureReviewIndexes } from '../../helpers/review-indexes';
 import { testConfig } from '../../helpers/config';
 import { type MongoMemory, startMongoMemory } from '../../helpers/mongo-memory';
 import { type OpenLibraryStub, startOpenLibraryStub } from '../../helpers/open-library-stub';
@@ -27,12 +33,15 @@ describe('books routes (integration)', () => {
   let openLibrary: OpenLibraryStub;
   let apps: FastifyInstance[] = [];
   let auth: string;
+  let readerId: string;
 
   beforeAll(async () => {
     mongo = await startMongoMemory();
     const db = mongo.client.db(DB_NAME);
     await ensureAuthIndexes(db);
     await ensureBookIndexes(db);
+    await ensureFollowIndexes(db);
+    await ensureReviewIndexes(db);
 
     const user = await new MongoUserRepository(db).create({
       email: 'reader@example.com',
@@ -40,6 +49,7 @@ describe('books routes (integration)', () => {
       handle: 'reader',
       displayName: 'Reader',
     });
+    readerId = user.id;
     auth = `Bearer ${signAccessToken({ userId: user.id }, SECRET)}`;
 
     openLibrary = await startOpenLibraryStub([STUB_DOC]);
@@ -54,8 +64,11 @@ describe('books routes (integration)', () => {
     openLibrary.setDocs([STUB_DOC]);
     const db = mongo.client.db(DB_NAME);
     await Promise.all(
-      ['books', 'shelf_memberships', 'reading_sessions'].map((c) => db.collection(c).deleteMany({})),
+      ['books', 'shelf_memberships', 'reading_sessions', 'follows', 'reviews'].map((c) =>
+        db.collection(c).deleteMany({}),
+      ),
     );
+    await db.collection('users').deleteMany({ handle: { $ne: 'reader' } });
   });
 
   afterEach(async () => {
@@ -224,5 +237,92 @@ describe('books routes (integration)', () => {
       headers: { authorization: auth },
     });
     expect(list.json().items).toHaveLength(0);
+  });
+
+  // ---- book reviews by following ----------------------------------------
+
+  it('reviews: 200 with the review of a followed user, author block carries avatarUrl: null', async () => {
+    const db = mongo.client.db(DB_NAME);
+    const userRepo = new MongoUserRepository(db);
+    const bookRepo = new MongoBookRepository(db);
+    const followRepo = new MongoFollowRepository(db);
+    const sessionRepo = new MongoReadingSessionRepository(db);
+    const reviewRepo = new MongoReviewRepository(db);
+
+    const ana = await userRepo.create({
+      email: 'ana@example.com',
+      passwordHash: 'scrypt$1$1$1$c2FsdA==$aGFzaA==',
+      handle: 'ana',
+      displayName: 'Ana',
+    });
+    const book = await bookRepo.upsertByOlid({
+      olid: 'OL_STUB_W',
+      isbn13: null,
+      title: 'Stub Book',
+      authors: ['Stub Author'],
+      coverUrl: null,
+      firstPublishYear: 2000,
+      pageCount: 210,
+    });
+    await followRepo.create(readerId, ana.id, new Date());
+    const session = await sessionRepo.createFinished(ana.id, book.id, {
+      startedAt: null,
+      finishedAt: new Date(),
+    });
+    await reviewRepo.create(ana.id, session.id, book.id, {
+      rating: 5,
+      text: 'excelente',
+      containsSpoiler: false,
+    });
+
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/books/OL_STUB_W/reviews',
+      headers: { authorization: auth },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.nextCursor).toBeNull();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      author: { userId: ana.id, handle: 'ana', displayName: 'Ana', avatarUrl: null },
+      rating: 5,
+      text: 'excelente',
+      containsSpoiler: false,
+    });
+    expect(typeof body.items[0].reviewId).toBe('string');
+    expect(typeof body.items[0].createdAt).toBe('string');
+  });
+
+  it('reviews: 200 empty page when the caller follows nobody with a review', async () => {
+    const app = await build();
+    await seedBook(app);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/books/OL_STUB_W/reviews',
+      headers: { authorization: auth },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ items: [], nextCursor: null });
+  });
+
+  it('reviews: 401 without a bearer token', async () => {
+    const app = await build();
+    const res = await app.inject({ method: 'GET', url: '/v1/books/OL_STUB_W/reviews' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('reviews: 404 for an unknown olid', async () => {
+    openLibrary.setDocs([]);
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/books/OL_DOES_NOT_EXIST_W/reviews',
+      headers: { authorization: auth },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe('BOOK_NOT_FOUND');
   });
 });

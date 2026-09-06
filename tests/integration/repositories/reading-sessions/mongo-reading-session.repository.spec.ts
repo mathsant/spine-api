@@ -171,4 +171,43 @@ describe('MongoReadingSessionRepository (integration)', () => {
 
     expect(await repo.countDistinctFinishedReaders(bookId)).toBe(2);
   });
+
+  describe('findLatestFinishedPerUserForBook', () => {
+    it('returns an empty array for empty userIds without touching the database', async () => {
+      await expect(repo.findLatestFinishedPerUserForBook(bookId, [])).resolves.toEqual([]);
+    });
+
+    it('returns at most one row per user: the most recent finished session of the book', async () => {
+      await repo.createFinished(userId, bookId, {
+        startedAt: null,
+        finishedAt: new Date('2024-01-01T00:00:00.000Z'),
+      });
+      const latest = await repo.createFinished(userId, bookId, {
+        startedAt: null,
+        finishedAt: new Date('2024-06-01T00:00:00.000Z'),
+      });
+      await repo.createFinished(otherUserId, bookId, {
+        startedAt: null,
+        finishedAt: new Date('2024-03-01T00:00:00.000Z'),
+      });
+
+      const rows = await repo.findLatestFinishedPerUserForBook(bookId, [userId, otherUserId]);
+
+      expect(rows).toHaveLength(2);
+      const forUser = rows.find((row) => row.userId === userId);
+      expect(forUser?.id).toBe(latest.id);
+    });
+
+    it('ignores reading sessions, other books, and users outside the list', async () => {
+      await repo.startReading(userId, bookId, new Date()); // reading, not finished
+      await repo.createFinished(userId, '507f1f77bcf86cd7994390ff', {
+        startedAt: null,
+        finishedAt: new Date(),
+      }); // other book
+      await repo.createFinished(otherUserId, bookId, { startedAt: null, finishedAt: new Date() });
+
+      const rows = await repo.findLatestFinishedPerUserForBook(bookId, [userId]);
+      expect(rows).toEqual([]);
+    });
+  });
 });

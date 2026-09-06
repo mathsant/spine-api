@@ -2,6 +2,7 @@ import { asFunction, type AwilixContainer } from 'awilix';
 
 import {
   makeGetBook,
+  makeListBookReviews,
   makeListWantToRead,
   makeMarkWantToRead,
   makeSearchBooks,
@@ -194,6 +195,16 @@ export function registerServices(container: AwilixContainer<AppCradle>): void {
       makeListWantToRead({
         shelfMembershipRepository: cradle.shelfMembershipRepository,
         bookRepository: cradle.bookRepository,
+      }),
+    ).singleton(),
+    listBookReviewsService: asFunction((cradle: AppCradle) =>
+      makeListBookReviews({
+        bookRepository: cradle.bookRepository,
+        openLibraryClient: cradle.openLibraryClient,
+        followRepository: cradle.followRepository,
+        readingSessionRepository: cradle.readingSessionRepository,
+        reviewRepository: cradle.reviewRepository,
+        userRepository: cradle.userRepository,
       }),
     ).singleton(),
     startReadingService: asFunction((cradle: AppCradle) =>

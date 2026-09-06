@@ -28,3 +28,28 @@ export interface BookCursorPageDTO {
   items: BookSearchResultDTO[];
   nextCursor: string | null;
 }
+
+/** Author block of a `BookReviewByFollowingDTO`. `avatarUrl` is always `null` for now
+ * (avatar upload is not part of the API yet) — same convention as `UserSearchResult`. */
+export interface BookReviewAuthorDTO {
+  userId: string;
+  handle: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+/** One item of `GET /books/{olid}/reviews` — a review of the book by someone the
+ * caller follows (approved). At most one per followed user (feature 010). */
+export interface BookReviewByFollowingDTO {
+  reviewId: string;
+  author: BookReviewAuthorDTO;
+  rating: number;
+  text: string | null;
+  containsSpoiler: boolean;
+  createdAt: string;
+}
+
+export interface BookReviewByFollowingCursorPageDTO {
+  items: BookReviewByFollowingDTO[];
+  nextCursor: string | null;
+}
