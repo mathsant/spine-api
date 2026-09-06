@@ -20,6 +20,12 @@ export type {
   ListBookReviewsDeps,
   ListBookReviewsInput,
 } from './list-book-reviews.service';
+export { makeListPopularAmongFollowing } from './list-popular-among-following.service';
+export type {
+  ListPopularAmongFollowing,
+  ListPopularAmongFollowingDeps,
+  ListPopularAmongFollowingInput,
+} from './list-popular-among-following.service';
 export type {
   BookSearchResultDTO,
   BookSearchPageDTO,
@@ -28,4 +34,5 @@ export type {
   BookReviewAuthorDTO,
   BookReviewByFollowingDTO,
   BookReviewByFollowingCursorPageDTO,
+  PopularAmongFollowingResponseDTO,
 } from './types';

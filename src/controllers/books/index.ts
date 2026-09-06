@@ -7,3 +7,4 @@ export { startReadingController } from './start-reading.controller';
 export { markFinishedController } from './mark-finished.controller';
 export { listWantToReadController } from './list-want-to-read.controller';
 export { listBookReviewsController } from './list-book-reviews.controller';
+export { listPopularAmongFollowingController } from './list-popular-among-following.controller';

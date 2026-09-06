@@ -231,6 +231,47 @@ export class MongoReadingSessionRepository implements ReadingSessionRepository {
     return docs.map(toRecord);
   }
 
+  async listBookIdsForUser(userId: string): Promise<string[]> {
+    return this.sessions.distinct('bookId', { userId });
+  }
+
+  async aggregatePopularBookIdsForReaders(
+    readerIds: string[],
+    excludeBookIds: string[],
+    limit: number,
+  ): Promise<Array<{ bookId: string; readerCount: number; lastActivityAt: Date }>> {
+    if (readerIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.sessions
+      .aggregate<{ _id: string; readerCount: number; lastActivityAt: Date }>([
+        {
+          $match: {
+            userId: { $in: readerIds },
+            ...(excludeBookIds.length > 0 ? { bookId: { $nin: excludeBookIds } } : {}),
+          },
+        },
+        {
+          $group: {
+            _id: '$bookId',
+            readers: { $addToSet: '$userId' },
+            lastActivityAt: { $max: '$createdAt' },
+          },
+        },
+        { $project: { readerCount: { $size: '$readers' }, lastActivityAt: 1 } },
+        { $sort: { readerCount: -1, lastActivityAt: -1 } },
+        { $limit: limit },
+      ])
+      .toArray();
+
+    return rows.map((row) => ({
+      bookId: row._id,
+      readerCount: row.readerCount,
+      lastActivityAt: row.lastActivityAt,
+    }));
+  }
+
   private async requireDoc(sessionId: string): Promise<ReadingSessionDocument> {
     if (!ObjectId.isValid(sessionId)) {
       throw new ReadingSessionNotFoundError();

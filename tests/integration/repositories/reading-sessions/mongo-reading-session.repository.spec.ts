@@ -287,4 +287,46 @@ describe('MongoReadingSessionRepository (integration)', () => {
       expect(rows).toEqual([]);
     });
   });
+
+  describe('listBookIdsForUser', () => {
+    it('returns the distinct bookIds the user has any session for', async () => {
+      await repo.startReading(userId, 'book-a', new Date());
+      await repo.createFinished(userId, 'book-b', { startedAt: null, finishedAt: new Date() });
+      await repo.createFinished(userId, 'book-b', { startedAt: null, finishedAt: new Date() }); // reread
+      await repo.createFinished(otherUserId, 'book-c', { startedAt: null, finishedAt: new Date() });
+
+      const ids = await repo.listBookIdsForUser(userId);
+      expect([...ids].sort()).toEqual(['book-a', 'book-b']);
+    });
+  });
+
+  describe('aggregatePopularBookIdsForReaders', () => {
+    it('returns [] for empty readerIds without touching the database', async () => {
+      await expect(repo.aggregatePopularBookIdsForReaders([], [], 20)).resolves.toEqual([]);
+    });
+
+    it('ranks by distinct readers, excludes given bookIds, and respects the limit', async () => {
+      const r1 = '607f1f77bcf86cd799430001';
+      const r2 = '607f1f77bcf86cd799430002';
+      const stranger = '607f1f77bcf86cd799430099';
+
+      // book-y: 2 distinct readers among [r1, r2]; book-z: 1; book-known: excluded
+      await repo.createFinished(r1, 'book-y', { startedAt: null, finishedAt: new Date() });
+      await repo.createFinished(r1, 'book-y', { startedAt: null, finishedAt: new Date() }); // reread, same reader
+      await repo.createFinished(r2, 'book-y', { startedAt: null, finishedAt: new Date() });
+      await repo.createFinished(r2, 'book-z', { startedAt: null, finishedAt: new Date() });
+      await repo.createFinished(r1, 'book-known', { startedAt: null, finishedAt: new Date() });
+      await repo.createFinished(stranger, 'book-y', { startedAt: null, finishedAt: new Date() }); // not a reader
+
+      const ranked = await repo.aggregatePopularBookIdsForReaders([r1, r2], ['book-known'], 20);
+
+      expect(ranked.map((row) => row.bookId)).toEqual(['book-y', 'book-z']);
+      expect(ranked[0]).toMatchObject({ bookId: 'book-y', readerCount: 2 });
+      expect(ranked[1]).toMatchObject({ bookId: 'book-z', readerCount: 1 });
+      expect(ranked[0].lastActivityAt).toBeInstanceOf(Date);
+
+      const capped = await repo.aggregatePopularBookIdsForReaders([r1, r2], [], 1);
+      expect(capped).toHaveLength(1);
+    });
+  });
 });

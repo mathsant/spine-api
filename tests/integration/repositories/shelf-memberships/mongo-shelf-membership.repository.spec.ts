@@ -72,4 +72,13 @@ describe('MongoShelfMembershipRepository (integration)', () => {
     const page = await repo.list(userId, null, 10);
     expect(page.items.map((item) => item.bookId)).toEqual([bookId]);
   });
+
+  it('listBookIdsForUser returns the distinct want-to-read bookIds of the user only', async () => {
+    await repo.add(userId, bookId);
+    await repo.add(userId, otherBookId);
+    await repo.add('another-user', 'not-mine');
+
+    const ids = await repo.listBookIdsForUser(userId);
+    expect([...ids].sort()).toEqual([bookId, otherBookId].sort());
+  });
 });

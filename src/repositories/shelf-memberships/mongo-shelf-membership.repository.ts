@@ -37,6 +37,10 @@ export class MongoShelfMembershipRepository implements ShelfMembershipRepository
     await this.memberships.deleteOne({ userId, bookId });
   }
 
+  async listBookIdsForUser(userId: string): Promise<string[]> {
+    return this.memberships.distinct('bookId', { userId });
+  }
+
   async list(
     userId: string,
     cursor: string | null,

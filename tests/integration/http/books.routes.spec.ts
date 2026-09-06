@@ -325,4 +325,62 @@ describe('books routes (integration)', () => {
     expect(res.statusCode).toBe(404);
     expect(res.json().error.code).toBe('BOOK_NOT_FOUND');
   });
+
+  // ---- popular among following ----------------------------------------
+
+  it('popular-among-following: 200 with BookSearchResult items, no cursor; static route not shadowed by :olid', async () => {
+    const db = mongo.client.db(DB_NAME);
+    const userRepo = new MongoUserRepository(db);
+    const bookRepo = new MongoBookRepository(db);
+    const followRepo = new MongoFollowRepository(db);
+    const sessionRepo = new MongoReadingSessionRepository(db);
+
+    const ana = await userRepo.create({
+      email: 'ana2@example.com',
+      passwordHash: 'scrypt$1$1$1$c2FsdA==$aGFzaA==',
+      handle: 'ana2',
+      displayName: 'Ana',
+    });
+    const book = await bookRepo.upsertByOlid({
+      olid: 'OL_POP_W',
+      isbn13: null,
+      title: 'Popular',
+      authors: ['A'],
+      coverUrl: null,
+      firstPublishYear: 2001,
+      pageCount: 123,
+    });
+    await followRepo.create(readerId, ana.id, new Date());
+    await sessionRepo.createFinished(ana.id, book.id, { startedAt: null, finishedAt: new Date() });
+
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/books/popular-among-following',
+      headers: { authorization: auth },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).not.toHaveProperty('nextCursor');
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({ olid: 'OL_POP_W', title: 'Popular', pageCount: 123 });
+  });
+
+  it('popular-among-following: 200 empty list when the caller follows nobody', async () => {
+    const app = await build();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/books/popular-among-following',
+      headers: { authorization: auth },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ items: [] });
+  });
+
+  it('popular-among-following: 401 without a bearer token', async () => {
+    const app = await build();
+    const res = await app.inject({ method: 'GET', url: '/v1/books/popular-among-following' });
+    expect(res.statusCode).toBe(401);
+  });
 });

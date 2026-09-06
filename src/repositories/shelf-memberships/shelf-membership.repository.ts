@@ -19,4 +19,7 @@ export interface ShelfMembershipRepository {
   remove(userId: string, bookId: string): Promise<void>;
   /** Cursor page ordered by `createdAt` desc. */
   list(userId: string, cursor: string | null, limit: number): Promise<CursorPage<ShelfMembershipRecord>>;
+  /** Distinct `bookId`s this user marked as want-to-read. Feature 010 — used to
+   * exclude already-known books from `GET /books/popular-among-following`. */
+  listBookIdsForUser(userId: string): Promise<string[]>;
 }

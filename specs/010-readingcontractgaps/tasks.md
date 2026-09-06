@@ -111,22 +111,22 @@ Caminhos seguem a tabela "Onde cada tipo de código novo deve ir" de `.specify/m
 ## Fase F6 — `GET /books/popular-among-following`
 
 ### Testes primeiro
-- [ ] **T053** Estender `tests/integration/repositories/reading-sessions/mongo-reading-session.repository.spec.ts`: `aggregatePopularBookIdsForReaders` — contagem por `userId` distinto, `$nin` de `excludeBookIds`, `$limit`, ordena por `readerCount` desc + `lastActivityAt` desc, `readerIds` vazio → `[]`; `listBookIdsForUser` devolve `distinct('bookId')` do usuário.
-- [ ] **T054** [P] Estender `tests/integration/repositories/shelf-memberships/mongo-shelf-membership.repository.spec.ts`: `listBookIdsForUser` devolve os `bookId` marcados como want-to-read pelo usuário.
-- [ ] **T055** `tests/integration/services/books/list-popular-among-following.service.spec.ts`: RF-013..020 — ranking por leitores distintos, empate por atividade recente depois `title`, exclusão de livro que o solicitante já tem session **ou** want-to-read, teto de 20 sem `nextCursor`, sessions de não-seguido não contam (**DoD P6**), sem followees/sem atividade/tudo conhecido → `{ items: [] }`.
-- [ ] **T056** Estender `tests/integration/http/books.routes.spec.ts`: `GET /v1/books/popular-among-following` → 200 (`{items:[...]}` sem `nextCursor`, itens no formato `BookSearchResult` com `pageCount`), 401 sem token; `GET /v1/books/:olid` continua funcionando (a rota estática não é capturada por `:olid`).
+- [x] **T053** Estender `tests/integration/repositories/reading-sessions/mongo-reading-session.repository.spec.ts`: `aggregatePopularBookIdsForReaders` — contagem por `userId` distinto, `$nin` de `excludeBookIds`, `$limit`, ordena por `readerCount` desc + `lastActivityAt` desc, `readerIds` vazio → `[]`; `listBookIdsForUser` devolve `distinct('bookId')` do usuário.
+- [x] **T054** [P] Estender `tests/integration/repositories/shelf-memberships/mongo-shelf-membership.repository.spec.ts`: `listBookIdsForUser` devolve os `bookId` marcados como want-to-read pelo usuário.
+- [x] **T055** `tests/integration/services/books/list-popular-among-following.service.spec.ts`: RF-013..020 — ranking por leitores distintos, empate por atividade recente depois `title`, exclusão de livro que o solicitante já tem session **ou** want-to-read, teto de 20 sem `nextCursor`, sessions de não-seguido não contam (**DoD P6**), sem followees/sem atividade/tudo conhecido → `{ items: [] }`.
+- [x] **T056** Estender `tests/integration/http/books.routes.spec.ts`: `GET /v1/books/popular-among-following` → 200 (`{items:[...]}` sem `nextCursor`, itens no formato `BookSearchResult` com `pageCount`), 401 sem token; `GET /v1/books/:olid` continua funcionando (a rota estática não é capturada por `:olid`).
 
 ### Implementação
-- [ ] **T057** `src/repositories/reading-sessions/reading-session.repository.ts`: assinaturas `aggregatePopularBookIdsForReaders(readerIds: string[], excludeBookIds: string[], limit: number): Promise<Array<{ bookId: string; readerCount: number; lastActivityAt: Date }>>` e `listBookIdsForUser(userId: string): Promise<string[]>`.
-- [ ] **T058** `src/repositories/reading-sessions/mongo-reading-session.repository.ts`: implementar as duas (aggregation `$group` com `$addToSet`/`$size`/`$max`; `distinct`). `readerIds` vazio → `[]` sem tocar o banco.
-- [ ] **T059** `src/repositories/shelf-memberships/shelf-membership.repository.ts` + `src/repositories/shelf-memberships/mongo-shelf-membership.repository.ts`: `listBookIdsForUser(userId): Promise<string[]>` (`distinct('bookId', { userId })`).
-- [ ] **T060** `src/services/books/types.ts`: `PopularAmongFollowingResponseDTO { items: BookSearchResultDTO[] }`.
-- [ ] **T061** `src/services/books/list-popular-among-following.service.ts`: `makeListPopularAmongFollowing({ followRepository, readingSessionRepository, shelfMembershipRepository, bookRepository })` — `listFolloweeIds` (vazio → `{items:[]}`); `excludeBookIds` = união de `readingSessionRepository.listBookIdsForUser(userId)` e `shelfMembershipRepository.listBookIdsForUser(userId)`; `aggregatePopularBookIdsForReaders(followeeIds, excludeBookIds, 20)`; `bookRepository.findById` em lote; desempate final por `title` asc; mapear para `BookSearchResultDTO` (com `pageCount`).
-- [ ] **T062** `src/services/books/index.ts`: re-export.
-- [ ] **T063** `src/controllers/books/list-popular-among-following.controller.ts`: handler — exige `currentUser`, resolve `listPopularAmongFollowingService`, `reply.status(200)`.
-- [ ] **T064** `src/controllers/books/books.routes.ts`: registrar `app.get('/books/popular-among-following', { preHandler: app.authenticate }, listPopularAmongFollowingController)` **antes** de `app.get('/books/:olid', ...)`; re-export no index se necessário.
-- [ ] **T065** `src/container/register-services.ts`: registrar `listPopularAmongFollowingService` com as 4 deps.
-- [ ] **T066** Rodar `pnpm test` books + `pnpm typecheck`; T053–T056 passam.
+- [x] **T057** `src/repositories/reading-sessions/reading-session.repository.ts`: assinaturas `aggregatePopularBookIdsForReaders(readerIds: string[], excludeBookIds: string[], limit: number): Promise<Array<{ bookId: string; readerCount: number; lastActivityAt: Date }>>` e `listBookIdsForUser(userId: string): Promise<string[]>`.
+- [x] **T058** `src/repositories/reading-sessions/mongo-reading-session.repository.ts`: implementar as duas (aggregation `$group` com `$addToSet`/`$size`/`$max`; `distinct`). `readerIds` vazio → `[]` sem tocar o banco.
+- [x] **T059** `src/repositories/shelf-memberships/shelf-membership.repository.ts` + `src/repositories/shelf-memberships/mongo-shelf-membership.repository.ts`: `listBookIdsForUser(userId): Promise<string[]>` (`distinct('bookId', { userId })`).
+- [x] **T060** `src/services/books/types.ts`: `PopularAmongFollowingResponseDTO { items: BookSearchResultDTO[] }`.
+- [x] **T061** `src/services/books/list-popular-among-following.service.ts`: `makeListPopularAmongFollowing({ followRepository, readingSessionRepository, shelfMembershipRepository, bookRepository })` — `listFolloweeIds` (vazio → `{items:[]}`); `excludeBookIds` = união de `readingSessionRepository.listBookIdsForUser(userId)` e `shelfMembershipRepository.listBookIdsForUser(userId)`; `aggregatePopularBookIdsForReaders(followeeIds, excludeBookIds, 20)`; `bookRepository.findById` em lote; desempate final por `title` asc; mapear para `BookSearchResultDTO` (com `pageCount`).
+- [x] **T062** `src/services/books/index.ts`: re-export.
+- [x] **T063** `src/controllers/books/list-popular-among-following.controller.ts`: handler — exige `currentUser`, resolve `listPopularAmongFollowingService`, `reply.status(200)`.
+- [x] **T064** `src/controllers/books/books.routes.ts`: registrar `app.get('/books/popular-among-following', { preHandler: app.authenticate }, listPopularAmongFollowingController)` **antes** de `app.get('/books/:olid', ...)`; re-export no index se necessário.
+- [x] **T065** `src/container/register-services.ts`: registrar `listPopularAmongFollowingService` com as 4 deps.
+- [x] **T066** Rodar `pnpm test` books + `pnpm typecheck`; T053–T056 passam.
 
 ---
 

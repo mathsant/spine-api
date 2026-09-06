@@ -2,6 +2,7 @@ import type { FastifyPluginCallback } from 'fastify';
 
 import { getBookController } from './get-book.controller';
 import { listBookReviewsController } from './list-book-reviews.controller';
+import { listPopularAmongFollowingController } from './list-popular-among-following.controller';
 import { listWantToReadController } from './list-want-to-read.controller';
 import { markFinishedController } from './mark-finished.controller';
 import { markWantToReadController } from './mark-want-to-read.controller';
@@ -16,6 +17,11 @@ import { unmarkWantToReadController } from './unmark-want-to-read.controller';
  */
 export const booksRoutes: FastifyPluginCallback = (app, _opts, done) => {
   app.get('/books/search', { preHandler: app.authenticate }, searchBooksController);
+  app.get(
+    '/books/popular-among-following',
+    { preHandler: app.authenticate },
+    listPopularAmongFollowingController,
+  );
   app.get('/books/:olid/reviews', { preHandler: app.authenticate }, listBookReviewsController);
   app.get('/books/:olid', { preHandler: app.authenticate }, getBookController);
   app.put('/books/:olid/want-to-read', { preHandler: app.authenticate }, markWantToReadController);

@@ -78,4 +78,19 @@ export interface ReadingSessionRepository {
     bookId: string,
     userIds: string[],
   ): Promise<ReadingSessionRecord[]>;
+
+  /** Distinct `bookId`s this user has any reading session for. Used to exclude
+   * already-known books from `GET /books/popular-among-following` (feature 010). */
+  listBookIdsForUser(userId: string): Promise<string[]>;
+
+  /**
+   * Books with any reading session by a user in `readerIds`, ranked by the number of
+   * distinct such users, then by most recent activity. `excludeBookIds` are dropped.
+   * Empty `readerIds` returns `[]` without touching the database. Feature 010.
+   */
+  aggregatePopularBookIdsForReaders(
+    readerIds: string[],
+    excludeBookIds: string[],
+    limit: number,
+  ): Promise<Array<{ bookId: string; readerCount: number; lastActivityAt: Date }>>;
 }

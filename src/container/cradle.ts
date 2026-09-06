@@ -25,6 +25,7 @@ import type {
 import type {
   GetBook,
   ListBookReviews,
+  ListPopularAmongFollowing,
   ListWantToRead,
   MarkWantToRead,
   SearchBooks,
@@ -109,6 +110,7 @@ export interface AppCradle {
   unmarkWantToReadService: UnmarkWantToRead;
   listWantToReadService: ListWantToRead;
   listBookReviewsService: ListBookReviews;
+  listPopularAmongFollowingService: ListPopularAmongFollowing;
   startReadingService: StartReading;
   markFinishedService: MarkFinished;
   updateProgressService: UpdateProgress;

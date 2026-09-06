@@ -53,3 +53,8 @@ export interface BookReviewByFollowingCursorPageDTO {
   items: BookReviewByFollowingDTO[];
   nextCursor: string | null;
 }
+
+/** Response of `GET /books/popular-among-following` — up to 20 books, no pagination. */
+export interface PopularAmongFollowingResponseDTO {
+  items: BookSearchResultDTO[];
+}
