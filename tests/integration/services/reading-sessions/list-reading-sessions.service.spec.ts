@@ -83,4 +83,76 @@ describe('list-reading-sessions service (integration)', () => {
     expect(reviewedItem?.review).toMatchObject({ rating: 4 });
     expect(unreviewedItem?.review).toBeNull();
   });
+
+  describe('status filter and ordering (feature 010)', () => {
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    async function seedMixedHistory() {
+      await readingSessionRepository.createFinished(userId, '507f1f77bcf86cd7994300a1', {
+        startedAt: null,
+        finishedAt: new Date('2024-01-01T00:00:00.000Z'),
+      });
+      await sleep(5);
+      await readingSessionRepository.createFinished(userId, '507f1f77bcf86cd7994300a2', {
+        startedAt: null,
+        finishedAt: new Date('2024-02-01T00:00:00.000Z'),
+      });
+      await sleep(5);
+      await readingSessionRepository.startReading(userId, '507f1f77bcf86cd7994300b1', new Date());
+      await sleep(5);
+      await readingSessionRepository.startReading(userId, '507f1f77bcf86cd7994300b2', new Date());
+    }
+
+    it('returns reading sessions before finished ones, createdAt desc within each group (RF-023)', async () => {
+      await seedMixedHistory();
+      const page = await listReadingSessions({ userId, cursor: null, limit: 20 });
+      expect(page.items.map((item) => item.status)).toEqual([
+        'reading',
+        'reading',
+        'finished',
+        'finished',
+      ]);
+    });
+
+    it('filters server-side by status (RF-021, RF-024)', async () => {
+      await seedMixedHistory();
+      const reading = await listReadingSessions({ userId, status: 'reading', cursor: null, limit: 20 });
+      const finished = await listReadingSessions({ userId, status: 'finished', cursor: null, limit: 20 });
+      expect(reading.items.map((i) => i.status)).toEqual(['reading', 'reading']);
+      expect(finished.items.map((i) => i.status)).toEqual(['finished', 'finished']);
+    });
+
+    it('applies bookId and status together (RF-026)', async () => {
+      await readingSessionRepository.startReading(userId, bookId, new Date());
+      await readingSessionRepository.createFinished(userId, bookId, {
+        startedAt: null,
+        finishedAt: new Date(),
+      });
+
+      const page = await listReadingSessions({
+        userId,
+        bookId,
+        status: 'finished',
+        cursor: null,
+        limit: 20,
+      });
+      expect(page.items).toHaveLength(1);
+      expect(page.items[0]).toMatchObject({ bookId, status: 'finished' });
+    });
+
+    it('keeps cursor pagination stable across the reading→finished boundary (RF-025)', async () => {
+      await seedMixedHistory();
+
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      for (let i = 0; i < 5; i += 1) {
+        const page = await listReadingSessions({ userId, cursor, limit: 2 });
+        seen.push(...page.items.map((item) => item.id));
+        cursor = page.nextCursor;
+        if (cursor === null) break;
+      }
+      expect(seen).toHaveLength(4);
+      expect(new Set(seen).size).toBe(4);
+    });
+  });
 });

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   InvalidReadingSessionDatesError,
   InvalidReadingSessionStateError,
+  ValidationError,
 } from '../../../../src/errors';
 import { MongoReadingSessionRepository } from '../../../../src/repositories/reading-sessions';
 import { ensureBookIndexes } from '../../../helpers/book-indexes';
@@ -161,6 +162,82 @@ describe('MongoReadingSessionRepository (integration)', () => {
     const filtered = await repo.listByUser(userId, { bookId }, null, 10);
     expect(filtered.items).toHaveLength(1);
     expect(filtered.items[0].bookId).toBe(bookId);
+  });
+
+  describe('listByUser status filter and ordering (feature 010)', () => {
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    async function seedMixedHistory() {
+      // 2 finished, then 2 reading (distinct books to dodge the open-session unique index).
+      await repo.createFinished(userId, '507f1f77bcf86cd7994300a1', {
+        startedAt: null,
+        finishedAt: new Date('2024-01-01T00:00:00.000Z'),
+      });
+      await sleep(5);
+      await repo.createFinished(userId, '507f1f77bcf86cd7994300a2', {
+        startedAt: null,
+        finishedAt: new Date('2024-02-01T00:00:00.000Z'),
+      });
+      await sleep(5);
+      await repo.startReading(userId, '507f1f77bcf86cd7994300b1', new Date());
+      await sleep(5);
+      await repo.startReading(userId, '507f1f77bcf86cd7994300b2', new Date());
+    }
+
+    it('orders all reading before all finished, then createdAt desc within each group (RF-023)', async () => {
+      await seedMixedHistory();
+
+      const page = await repo.listByUser(userId, {}, null, 10);
+
+      expect(page.items.map((item) => item.status)).toEqual([
+        'reading',
+        'reading',
+        'finished',
+        'finished',
+      ]);
+      // newest-first inside each group
+      expect(page.items[0].createdAt.getTime()).toBeGreaterThan(page.items[1].createdAt.getTime());
+      expect(page.items[2].createdAt.getTime()).toBeGreaterThan(page.items[3].createdAt.getTime());
+    });
+
+    it('filters to a single status when asked (RF-021, RF-024)', async () => {
+      await seedMixedHistory();
+
+      const reading = await repo.listByUser(userId, { status: 'reading' }, null, 10);
+      expect(reading.items.map((i) => i.status)).toEqual(['reading', 'reading']);
+
+      const finished = await repo.listByUser(userId, { status: 'finished' }, null, 10);
+      expect(finished.items.map((i) => i.status)).toEqual(['finished', 'finished']);
+    });
+
+    it('paginates by cursor across the reading→finished boundary without repetition or omission (RF-025)', async () => {
+      await seedMixedHistory();
+
+      const collected: string[] = [];
+      let cursor: string | null = null;
+      for (let i = 0; i < 5; i += 1) {
+        const page: Awaited<ReturnType<typeof repo.listByUser>> = await repo.listByUser(
+          userId,
+          {},
+          cursor,
+          2,
+        );
+        collected.push(...page.items.map((item) => item.id));
+        cursor = page.nextCursor;
+        if (cursor === null) break;
+      }
+
+      expect(collected).toHaveLength(4);
+      expect(new Set(collected).size).toBe(4);
+    });
+
+    it('rejects a cursor emitted before feature 010 (no status field)', async () => {
+      const legacy = Buffer.from(
+        JSON.stringify({ createdAt: new Date().toISOString(), id: '507f1f77bcf86cd799439011' }),
+      ).toString('base64url');
+
+      await expect(repo.listByUser(userId, {}, legacy, 10)).rejects.toBeInstanceOf(ValidationError);
+    });
   });
 
   it('countDistinctFinishedReaders counts distinct users with a finished session of the book', async () => {

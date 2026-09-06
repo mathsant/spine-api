@@ -75,20 +75,20 @@ Caminhos seguem a tabela "Onde cada tipo de código novo deve ir" de `.specify/m
 ## Fase F4 — Histórico: `status` + ordenação + cursor
 
 ### Testes primeiro
-- [ ] **T033** [P] `tests/unit/lib/reading-session-cursor.spec.ts`: round-trip de `{ status, createdAt, id }`; cursor no formato antigo (`{createdAt,id}` sem `status`) → `ValidationError`; base64url malformado → `ValidationError`.
-- [ ] **T034** [P] Estender `tests/unit/schemas/reading-sessions/list-reading-sessions.schema.spec.ts`: `status` aceita `reading`/`finished`, rejeita outro valor, ausência é válida.
-- [ ] **T035** Estender `tests/integration/repositories/reading-sessions/mongo-reading-session.repository.spec.ts`: `listByUser` com `filter.status`; sem filtro, ordena todas as `reading` antes das `finished`, cada grupo `createdAt` desc; keyset paginando através da fronteira reading→finished sem repetição/omissão (dataset com N>limit nos dois grupos); cursor no formato antigo → erro.
-- [ ] **T036** Estender `tests/integration/services/reading-sessions/list-reading-sessions.service.spec.ts`: RF-021..027 — atualizar asserts de ordenação hoje baseados só em `createdAt`; `status` + `bookId` combinados.
-- [ ] **T037** Estender `tests/integration/http/reading-sessions.routes.spec.ts`: `GET /v1/me/reading-sessions?status=reading|finished` filtra; `?status=xpto` → 400 `VALIDATION_ERROR`.
+- [x] **T033** [P] `tests/unit/lib/reading-session-cursor.spec.ts`: round-trip de `{ status, createdAt, id }`; cursor no formato antigo (`{createdAt,id}` sem `status`) → `ValidationError`; base64url malformado → `ValidationError`.
+- [x] **T034** [P] Estender `tests/unit/schemas/reading-sessions/list-reading-sessions.schema.spec.ts`: `status` aceita `reading`/`finished`, rejeita outro valor, ausência é válida.
+- [x] **T035** Estender `tests/integration/repositories/reading-sessions/mongo-reading-session.repository.spec.ts`: `listByUser` com `filter.status`; sem filtro, ordena todas as `reading` antes das `finished`, cada grupo `createdAt` desc; keyset paginando através da fronteira reading→finished sem repetição/omissão (dataset com N>limit nos dois grupos); cursor no formato antigo → erro.
+- [x] **T036** Estender `tests/integration/services/reading-sessions/list-reading-sessions.service.spec.ts`: RF-021..027 — atualizar asserts de ordenação hoje baseados só em `createdAt`; `status` + `bookId` combinados.
+- [x] **T037** Estender `tests/integration/http/reading-sessions.routes.spec.ts`: `GET /v1/me/reading-sessions?status=reading|finished` filtra; `?status=xpto` → 400 `VALIDATION_ERROR`.
 
 ### Implementação
-- [ ] **T038** `src/lib/reading-session-cursor.ts`: `encodeReadingSessionCursor({status,createdAt,id})` / `decodeReadingSessionCursor(string)` (base64url+JSON, valida os 3 campos e `status ∈ {reading,finished}`, senão `ValidationError`); export em `src/lib/index.ts`.
-- [ ] **T039** `src/schemas/reading-sessions/list-reading-sessions.schema.ts`: adicionar `status: z.enum(['reading', 'finished']).optional()`.
-- [ ] **T040** `src/repositories/reading-sessions/reading-session.repository.ts`: `listByUser` — `filter` passa a ser `{ bookId?: string; status?: 'reading' | 'finished' }`; atualizar o JSDoc.
-- [ ] **T041** `src/repositories/reading-sessions/mongo-reading-session.repository.ts`: em `listByUser` — aplicar `query.status` quando presente; `sort({ status: -1, createdAt: -1, _id: -1 })`; decodificar cursor com `decodeReadingSessionCursor`; predicado keyset de 3 chaves (`status` `$lt` → `status` igual + `createdAt` `$lt` → iguais + `_id` `$lt`); `nextCursor` via `encodeReadingSessionCursor` com o `status` do último item. Comentar a dependência da grafia do enum na ordenação.
-- [ ] **T042** `src/services/reading-sessions/list-reading-sessions.service.ts`: `ListReadingSessionsInput` ganha `status?: 'reading' | 'finished'`; repassar ao `repository.listByUser`.
-- [ ] **T043** `src/controllers/reading-sessions/list-reading-sessions.controller.ts`: extrair `status` do schema e repassar ao serviço.
-- [ ] **T044** Rodar `pnpm test` reading-sessions + `pnpm typecheck`; T033–T037 passam.
+- [x] **T038** `src/lib/reading-session-cursor.ts`: `encodeReadingSessionCursor({status,createdAt,id})` / `decodeReadingSessionCursor(string)` (base64url+JSON, valida os 3 campos e `status ∈ {reading,finished}`, senão `ValidationError`); export em `src/lib/index.ts`.
+- [x] **T039** `src/schemas/reading-sessions/list-reading-sessions.schema.ts`: adicionar `status: z.enum(['reading', 'finished']).optional()`.
+- [x] **T040** `src/repositories/reading-sessions/reading-session.repository.ts`: `listByUser` — `filter` passa a ser `{ bookId?: string; status?: 'reading' | 'finished' }`; atualizar o JSDoc.
+- [x] **T041** `src/repositories/reading-sessions/mongo-reading-session.repository.ts`: em `listByUser` — aplicar `query.status` quando presente; `sort({ status: -1, createdAt: -1, _id: -1 })`; decodificar cursor com `decodeReadingSessionCursor`; predicado keyset de 3 chaves (`status` `$lt` → `status` igual + `createdAt` `$lt` → iguais + `_id` `$lt`); `nextCursor` via `encodeReadingSessionCursor` com o `status` do último item. Comentar a dependência da grafia do enum na ordenação.
+- [x] **T042** `src/services/reading-sessions/list-reading-sessions.service.ts`: `ListReadingSessionsInput` ganha `status?: 'reading' | 'finished'`; repassar ao `repository.listByUser`.
+- [x] **T043** `src/controllers/reading-sessions/list-reading-sessions.controller.ts`: extrair `status` do schema e repassar ao serviço.
+- [x] **T044** Rodar `pnpm test` reading-sessions + `pnpm typecheck`; T033–T037 passam.
 
 ---
 

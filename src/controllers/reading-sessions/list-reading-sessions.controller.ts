@@ -13,7 +13,7 @@ export async function listReadingSessionsController(
     throw new UnauthenticatedError();
   }
 
-  const { bookId, cursor, limit } = listReadingSessionsSchema.parse(request.query);
+  const { bookId, status, cursor, limit } = listReadingSessionsSchema.parse(request.query);
   const listReadingSessions = request.diScope.resolve<ListReadingSessions>(
     'listReadingSessionsService',
   );
@@ -21,6 +21,7 @@ export async function listReadingSessionsController(
   const page = await listReadingSessions({
     userId: currentUser.id,
     bookId,
+    status,
     cursor: cursor ?? null,
     limit,
   });

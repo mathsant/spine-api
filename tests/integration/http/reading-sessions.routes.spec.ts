@@ -308,4 +308,42 @@ describe('reading-sessions routes (integration)', () => {
     expect(limited.json().items).toHaveLength(1);
     expect(limited.json().nextCursor).not.toBeNull();
   });
+
+  it('history: status filter and 400 on an invalid status (feature 010)', async () => {
+    const app = await build();
+
+    await app.inject({
+      method: 'POST',
+      url: '/v1/books/OL_STUB_W/start-reading',
+      headers: { authorization: auth },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/v1/books/OL_STUB_W/mark-finished',
+      headers: { authorization: auth },
+      payload: { finishedAt: '2024-01-01T00:00:00.000Z' },
+    });
+
+    const reading = await app.inject({
+      method: 'GET',
+      url: '/v1/me/reading-sessions?status=reading',
+      headers: { authorization: auth },
+    });
+    expect(reading.statusCode).toBe(200);
+    expect(reading.json().items.map((i: { status: string }) => i.status)).toEqual(['reading']);
+
+    const finished = await app.inject({
+      method: 'GET',
+      url: '/v1/me/reading-sessions?status=finished',
+      headers: { authorization: auth },
+    });
+    expect(finished.json().items.map((i: { status: string }) => i.status)).toEqual(['finished']);
+
+    const invalid = await app.inject({
+      method: 'GET',
+      url: '/v1/me/reading-sessions?status=abandoned',
+      headers: { authorization: auth },
+    });
+    expect(invalid.statusCode).toBe(400);
+  });
 });

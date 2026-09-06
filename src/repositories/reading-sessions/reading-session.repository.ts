@@ -51,10 +51,16 @@ export interface ReadingSessionRepository {
 
   delete(sessionId: string): Promise<void>;
 
-  /** Cursor page ordered by `createdAt` desc, optionally filtered by `bookId` (RF-019). */
+  /**
+   * Cursor page of the user's sessions. Without a `status` filter, ordered with all
+   * `reading` sessions before all `finished` ones, then by `createdAt` desc within each
+   * group (feature 010, RF-023). Optionally filtered by `bookId` and/or `status`
+   * (RF-019, RF-021). The cursor format carries `status` and is NOT compatible with
+   * cursors emitted before feature 010 (RF-027).
+   */
   listByUser(
     userId: string,
-    filter: { bookId?: string },
+    filter: { bookId?: string; status?: 'reading' | 'finished' },
     cursor: string | null,
     limit: number,
   ): Promise<CursorPage<ReadingSessionRecord>>;

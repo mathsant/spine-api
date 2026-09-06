@@ -1,7 +1,7 @@
 import { type Db, MongoServerError, ObjectId } from 'mongodb';
 
 import { InvalidReadingSessionDatesError, InvalidReadingSessionStateError, ReadingSessionNotFoundError } from '../../errors';
-import { decodeCursor, encodeCursor } from '../../lib';
+import { decodeReadingSessionCursor, encodeReadingSessionCursor } from '../../lib';
 import type { CursorPage } from '../shelf-memberships';
 import type {
   EditReadingSessionInput,
@@ -157,7 +157,7 @@ export class MongoReadingSessionRepository implements ReadingSessionRepository {
 
   async listByUser(
     userId: string,
-    filter: { bookId?: string },
+    filter: { bookId?: string; status?: 'reading' | 'finished' },
     cursor: string | null,
     limit: number,
   ): Promise<CursorPage<ReadingSessionRecord>> {
@@ -165,18 +165,27 @@ export class MongoReadingSessionRepository implements ReadingSessionRepository {
     if (filter.bookId !== undefined) {
       query.bookId = filter.bookId;
     }
+    if (filter.status !== undefined) {
+      query.status = filter.status;
+    }
     if (cursor !== null) {
-      const decoded = decodeCursor(cursor);
+      const decoded = decodeReadingSessionCursor(cursor);
       const createdAt = new Date(decoded.createdAt);
+      // Keyset for the next page under sort({ status: -1, createdAt: -1, _id: -1 }).
+      // With status: -1, 'reading' (lexicographically > 'finished') sorts first, so
+      // "after the cursor" across groups means a status that compares LESS.
       query.$or = [
-        { createdAt: { $lt: createdAt } },
-        { createdAt, _id: { $lt: new ObjectId(decoded.id) } },
+        { status: { $lt: decoded.status } },
+        { status: decoded.status, createdAt: { $lt: createdAt } },
+        { status: decoded.status, createdAt, _id: { $lt: new ObjectId(decoded.id) } },
       ];
     }
 
     const docs = await this.sessions
+      // `status: -1` groups `reading` before `finished` — depends on the enum spelling
+      // ('reading' > 'finished'); a rename must revisit this and the keyset above.
       .find(query)
-      .sort({ createdAt: -1, _id: -1 })
+      .sort({ status: -1, createdAt: -1, _id: -1 })
       .limit(limit + 1)
       .toArray();
 
@@ -188,7 +197,11 @@ export class MongoReadingSessionRepository implements ReadingSessionRepository {
       items: page.map(toRecord),
       nextCursor:
         hasMore && last
-          ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last._id.toHexString() })
+          ? encodeReadingSessionCursor({
+              status: last.status,
+              createdAt: last.createdAt.toISOString(),
+              id: last._id.toHexString(),
+            })
           : null,
     };
   }

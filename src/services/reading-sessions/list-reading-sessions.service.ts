@@ -6,6 +6,7 @@ import type { ReadingSessionCursorPageDTO } from './types';
 export interface ListReadingSessionsInput {
   userId: string;
   bookId?: string;
+  status?: 'reading' | 'finished';
   cursor: string | null;
   limit: number;
 }
@@ -23,8 +24,8 @@ export interface ListReadingSessionsDeps {
  */
 export const makeListReadingSessions =
   ({ readingSessionRepository, reviewRepository }: ListReadingSessionsDeps): ListReadingSessions =>
-  async ({ userId, bookId, cursor, limit }) => {
-    const page = await readingSessionRepository.listByUser(userId, { bookId }, cursor, limit);
+  async ({ userId, bookId, status, cursor, limit }) => {
+    const page = await readingSessionRepository.listByUser(userId, { bookId, status }, cursor, limit);
 
     const reviews = await reviewRepository.findBySessionIds(page.items.map((session) => session.id));
     const reviewBySessionId = new Map(reviews.map((review) => [review.sessionId, review]));
