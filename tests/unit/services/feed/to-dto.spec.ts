@@ -24,8 +24,8 @@ const book: BookRecord = {
   title: 'Dune',
   authors: ['Frank Herbert'],
   coverUrl: null,
-  firstPublishYear: null,
-  pageCount: null,
+  firstPublishYear: 1965,
+  pageCount: 412,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 };
@@ -55,8 +55,21 @@ describe('toFeedItemDTO', () => {
       reactionsCount: 0,
       hasReacted: false,
       actor: { userId: 'u1', handle: 'ana', displayName: 'Ana' },
-      book: { id: 'b1', title: 'Dune', authors: ['Frank Herbert'], coverUrl: null },
+      book: {
+        id: 'b1',
+        title: 'Dune',
+        authors: ['Frank Herbert'],
+        coverUrl: null,
+        firstPublishYear: 1965,
+        pageCount: 412,
+      },
     });
+  });
+
+  it('nulls firstPublishYear and pageCount when the book is missing', () => {
+    const dto = toFeedItemDTO(activity({ type: 'started_reading' }), actor, undefined, null, 0, false);
+
+    expect(dto.book).toMatchObject({ id: 'b1', firstPublishYear: null, pageCount: null });
   });
 
   it('embeds the live review only on a review_published item', () => {

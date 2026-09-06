@@ -27,6 +27,8 @@ export function toFeedItemDTO(
       title: book?.title ?? '',
       authors: book?.authors ?? [],
       coverUrl: book?.coverUrl ?? null,
+      firstPublishYear: book?.firstPublishYear ?? null,
+      pageCount: book?.pageCount ?? null,
     },
     readingSessionId: activity.readingSessionId,
     currentPage: activity.type === 'progress_update' ? activity.currentPage : null,

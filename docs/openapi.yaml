@@ -23,6 +23,11 @@ info:
     - `FeedItem` ganhou `reactionsCount` e `hasReacted` — presentes na implementação
       (`src/services/feed/types.ts`) mas ausentes no `feed.openapi.yaml` original (006),
       escrito antes de a feature 007-interactions adicionar reações.
+    - `FeedBook` ganhou `firstPublishYear` e `pageCount` (aditivo, não-quebra) — o card do
+      feed precisa da barra de progresso (`currentPage / pageCount`), da linha de páginas
+      e do "autor · ano" sem um fetch por livro. Mesma fonte do `BookSearchResult`; ambos
+      podem vir `null`. Vale para `GET /feed` e `GET /users/{userId}/activity`, que
+      compartilham `FeedItem`.
     - `ReadingSession` inclui `review` em **toda** resposta desse formato (iniciar leitura,
       progresso, finalizar, editar, listar) — não só na listagem, como o comentário do
       `reviews.openapi.yaml` original (005) sugeria. `toReadingSessionDTO`
@@ -289,7 +294,7 @@ paths:
                         type: "review_published"
                         createdAt: "2026-09-01T12:00:00.000Z"
                         actor: { userId: "64b7f0c2e1a2b3c4d5e6f002", handle: "bruno", displayName: "Bruno" }
-                        book: { id: "64b7f0c2e1a2b3c4d5e6b001", title: "Duna", authors: ["Frank Herbert"], coverUrl: null }
+                        book: { id: "64b7f0c2e1a2b3c4d5e6b001", title: "Duna", authors: ["Frank Herbert"], coverUrl: null, firstPublishYear: 1965, pageCount: 412 }
                         readingSessionId: "64b7f0c2e1a2b3c4d5e6c001"
                         currentPage: null
                         review: { id: "64b7f0c2e1a2b3c4d5e6d001", sessionId: "64b7f0c2e1a2b3c4d5e6c001", rating: 5, text: "Melhor releitura do ano.", containsSpoiler: false, createdAt: "2026-09-01T12:00:00.000Z", updatedAt: "2026-09-01T12:00:00.000Z" }
@@ -1325,12 +1330,24 @@ components:
     FeedBook:
       type: object
       additionalProperties: false
-      required: [id, title, authors, coverUrl]
+      required: [id, title, authors, coverUrl, firstPublishYear, pageCount]
       properties:
         id: { type: string }
         title: { type: string }
         authors: { type: array, items: { type: string } }
         coverUrl: { type: [string, "null"] }
+        firstPublishYear:
+          type: [integer, "null"]
+          description: "Ano da primeira publicação (linha \"autor · ano\"). `null` quando o Open Library não informa."
+        pageCount:
+          type: [integer, "null"]
+          description: >
+            Total de páginas (mesma fonte de `BookSearchResult.pageCount`:
+            `number_of_pages_median` do Open Library). Serve para a barra de progresso do
+            card `progress_update` — o cliente calcula `currentPage / pageCount` — e para a
+            linha "N páginas pela frente / N páginas lidas". `null` quando o Open Library
+            não informa ou quando o livro foi cacheado antes desta versão da API; nesse
+            caso o cliente degrada (esconde a barra e a linha de páginas).
 
     FeedItem:
       type: object

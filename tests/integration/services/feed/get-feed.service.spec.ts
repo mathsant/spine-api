@@ -137,6 +137,7 @@ describe('get-feed service (integration)', () => {
 
     const page = await getFeed({ userId: me.id, cursor: null, limit: 20 });
     expect(page.items.map((item) => item.currentPage)).toEqual([120, 50]);
+    expect(page.items[0].book).toMatchObject({ firstPublishYear: 1965, pageCount: 412 });
   });
 
   it('returns an empty list, not an error, when following nobody and having no activity (RF-013)', async () => {

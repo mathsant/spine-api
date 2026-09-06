@@ -12,6 +12,8 @@ export interface FeedBookDTO {
   title: string;
   authors: string[];
   coverUrl: string | null;
+  firstPublishYear: number | null;
+  pageCount: number | null;
 }
 
 export interface FeedItemDTO {
