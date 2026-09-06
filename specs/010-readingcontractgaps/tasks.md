@@ -43,10 +43,10 @@ Caminhos seguem a tabela "Onde cada tipo de código novo deve ir" de `.specify/m
 
 ## Fase F2 — Migration de índices
 
-- [ ] **T015** Criar migration via `npx migrate-mongo create add-reading-contract-gaps-indexes`; em `migrations/<ts>-add-reading-contract-gaps-indexes.js`, `up` cria: `reading_sessions` `{ userId:1, status:-1, createdAt:-1 }` (`reading_sessions_userId_status_createdAt`), `reading_sessions` `{ bookId:1, status:1, userId:1 }` (`reading_sessions_bookId_status_userId`), `reviews` `{ bookId:1, userId:1 }` (`reviews_bookId_userId`); `down` derruba os três por nome.
-- [ ] **T016** `tests/helpers/book-indexes.ts`: adicionar `reading_sessions_userId_status_createdAt` e `reading_sessions_bookId_status_userId` ao `ensureBookIndexes` (manter em sync com `migrations/`, conforme o comentário do helper).
-- [ ] **T017** `tests/helpers/review-indexes.ts`: adicionar `reviews_bookId_userId`.
-- [ ] **T018** `pnpm migrate:up` num banco local; conferir os 3 índices; `pnpm migrate:down` reverte sem erro; `pnpm migrate:up` de novo.
+- [x] **T015** Criar migration via `npx migrate-mongo create add-reading-contract-gaps-indexes`; em `migrations/<ts>-add-reading-contract-gaps-indexes.js`, `up` cria: `reading_sessions` `{ userId:1, status:-1, createdAt:-1 }` (`reading_sessions_userId_status_createdAt`), `reading_sessions` `{ bookId:1, status:1, userId:1 }` (`reading_sessions_bookId_status_userId`), `reviews` `{ bookId:1, userId:1 }` (`reviews_bookId_userId`); `down` derruba os três por nome.
+- [x] **T016** `tests/helpers/book-indexes.ts`: adicionar `reading_sessions_userId_status_createdAt` e `reading_sessions_bookId_status_userId` ao `ensureBookIndexes` (manter em sync com `migrations/`, conforme o comentário do helper).
+- [x] **T017** `tests/helpers/review-indexes.ts`: adicionar `reviews_bookId_userId`.
+- [~] **T018** (bloqueada: sem MongoDB local neste ambiente; criação equivalente dos 3 índices verificada via `mongodb-memory-server` nos helpers/testes de repositório) `pnpm migrate:up` num banco local; conferir os 3 índices; `pnpm migrate:down` reverte sem erro; `pnpm migrate:up` de novo.
 
 ---
 

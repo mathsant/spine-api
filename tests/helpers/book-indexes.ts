@@ -33,4 +33,18 @@ export async function ensureBookIndexes(db: Db): Promise<void> {
   await db
     .collection('reading_sessions')
     .createIndex({ userId: 1, bookId: 1 }, { name: 'reading_sessions_userId_bookId' });
+  // Feature 010: history ordering (reading before finished, then createdAt desc).
+  await db
+    .collection('reading_sessions')
+    .createIndex(
+      { userId: 1, status: -1, createdAt: -1 },
+      { name: 'reading_sessions_userId_status_createdAt' },
+    );
+  // Feature 010: latest-finished-per-user-for-book and popular-among-following.
+  await db
+    .collection('reading_sessions')
+    .createIndex(
+      { bookId: 1, status: 1, userId: 1 },
+      { name: 'reading_sessions_bookId_status_userId' },
+    );
 }

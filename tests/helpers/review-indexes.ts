@@ -12,4 +12,6 @@ export async function ensureReviewIndexes(db: Db): Promise<void> {
     .collection('reviews')
     .createIndex({ sessionId: 1 }, { unique: true, name: 'reviews_sessionId_unique' });
   await db.collection('reviews').createIndex({ bookId: 1 }, { name: 'reviews_bookId' });
+  // Feature 010: batch lookup of a book's reviews restricted to followed users.
+  await db.collection('reviews').createIndex({ bookId: 1, userId: 1 }, { name: 'reviews_bookId_userId' });
 }
