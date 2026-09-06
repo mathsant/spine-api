@@ -132,13 +132,13 @@ Caminhos seguem a tabela "Onde cada tipo de código novo deve ir" de `.specify/m
 
 ## Fase F7 — Documentação + fechamento
 
-- [ ] **T067** [P] `docs/openapi.yaml`: aplicar o delta de `contracts/openapi-delta.md` — paths `listBookReviewsByFollowing` e `listPopularAmongFollowing`; alterar `listReadingSessions` (param `status`, resposta `ReadingSessionListCursorPage`, `400`); schemas novos (`BookReviewByFollowing`, `BookReviewByFollowingCursorPage`, `PopularAmongFollowingResponse`, `ReadingSessionBook`, `ReadingSessionListItem`, `ReadingSessionListCursorPage`); `pageCount` em `BookSearchResult` (incluir em `required`).
-- [ ] **T068** [P] `docs/flows/reading-flow.md`: `pageCount` no livro (nullable, lazy); filtro `status` e ordenação reading→finished no histórico; `book` embutido nos itens; `bookId` = id interno do Book.
-- [ ] **T069** [P] `docs/flows/review-flow.md`: nova seção "Reviews de um livro por quem eu sigo" (`GET /books/{olid}/reviews`) — regra de 1-por-seguidor, exclusão da própria review, filtro P6, `avatarUrl` sempre `null`.
-- [ ] **T070** [P] `docs/pagination-guide.md`: o cursor de `GET /me/reading-sessions` mudou de formato (carrega `status`) e não é retrocompatível; `GET /books/{olid}/reviews` usa o cursor padrão; `GET /books/popular-among-following` não é paginado.
-- [ ] **T071** `pnpm docs:lint` sem erros; `pnpm typecheck`; `pnpm test` (suíte completa) verde; conferir que nenhum schema ficou órfão (`ReadingSessionCursorPage` — remover se o lint acusar).
-- [ ] **T072** Rodar `specs/010-readingcontractgaps/quickstart.md` manualmente (seed A/B/C, passos 2–6) e marcar o checklist de fechamento.
-- [ ] **T073** Fechar a Definição de Pronto da spec (4 itens) e enviar à sessão `spine-frontend` os nomes finais de rota/schema publicados no `openapi.yaml`.
+- [x] **T067** [P] `docs/openapi.yaml`: aplicar o delta de `contracts/openapi-delta.md` — paths `listBookReviewsByFollowing` e `listPopularAmongFollowing`; alterar `listReadingSessions` (param `status`, resposta `ReadingSessionListCursorPage`, `400`); schemas novos (`BookReviewByFollowing`, `BookReviewByFollowingCursorPage`, `PopularAmongFollowingResponse`, `ReadingSessionBook`, `ReadingSessionListItem`, `ReadingSessionListCursorPage`); `pageCount` em `BookSearchResult` (incluir em `required`).
+- [x] **T068** [P] `docs/flows/reading-flow.md`: `pageCount` no livro (nullable, lazy); filtro `status` e ordenação reading→finished no histórico; `book` embutido nos itens; `bookId` = id interno do Book.
+- [x] **T069** [P] `docs/flows/review-flow.md`: nova seção "Reviews de um livro por quem eu sigo" (`GET /books/{olid}/reviews`) — regra de 1-por-seguidor, exclusão da própria review, filtro P6, `avatarUrl` sempre `null`.
+- [x] **T070** [P] `docs/pagination-guide.md`: o cursor de `GET /me/reading-sessions` mudou de formato (carrega `status`) e não é retrocompatível; `GET /books/{olid}/reviews` usa o cursor padrão; `GET /books/popular-among-following` não é paginado.
+- [x] **T071** `pnpm docs:lint` sem erros; `pnpm typecheck`; `pnpm test` (suíte completa) verde; conferir que nenhum schema ficou órfão (`ReadingSessionCursorPage` — remover se o lint acusar).
+- [~] **T072** (não executável neste ambiente: exige MongoDB + servidor + Open Library reais; cobertura equivalente pelos testes de integração/rota com mongodb-memory-server) Rodar `specs/010-readingcontractgaps/quickstart.md` manualmente (seed A/B/C, passos 2–6) e marcar o checklist de fechamento.
+- [x] **T073** Fechar a Definição de Pronto da spec (4 itens) e enviar à sessão `spine-frontend` os nomes finais de rota/schema publicados no `openapi.yaml`.
 
 ---
 

@@ -10,6 +10,16 @@ Uma review é a avaliação (nota + texto opcional + flag de spoiler) de **uma r
 
 A review aparece embutida em toda resposta de `ReadingSession` (campo `review`) e, quando publicada, também como um item de feed (`type: review_published`) — ver `feed-flow.md`.
 
+## Reviews de um livro por quem eu sigo
+
+`GET /books/{olid}/reviews` (`listBookReviewsByFollowing`) — lista paginada por **cursor** das reviews de um livro feitas por usuários que **eu sigo com follow aprovado** (respeita a privacidade P6). Para a tela de detalhe do livro ("o que meu círculo achou").
+
+- **No máximo uma review por seguidor**: a da reading session `finished` mais recente daquele seguidor para aquele livro (mesma regra da "nota do usuário para o livro").
+- **Não inclui a minha própria review** — para essa, use `GET /me/reading-sessions?bookId=...`.
+- Cada item: `reviewId`, `author` (`userId`, `handle`, `displayName`, `avatarUrl`), `rating`, `text`, `containsSpoiler`, `createdAt`. Ordenado por `createdAt` da review, mais recente primeiro.
+- **`author.avatarUrl` vem sempre `null`** nesta versão — upload de avatar ainda não existe na API. O cliente deve usar inicial do nome / placeholder, nunca imagem.
+- `404 BOOK_NOT_FOUND` se o `olid` não existe nem no cache nem no Open Library. Página vazia (`items: []`, `nextCursor: null`) se o livro existe mas ninguém que eu sigo tem review `finished` dele.
+
 ## Regras de negócio não óbvias
 
 - **Nota é estrela cheia, inteiro 1–5** (decisão de produto P5) — não existe meia-estrela.
@@ -21,4 +31,4 @@ A review aparece embutida em toda resposta de `ReadingSession` (campo `review`) 
 
 ## Erros específicos deste fluxo
 
-`READING_SESSION_NOT_FOUND`, `READING_SESSION_NOT_FINISHED`, `REVIEW_ALREADY_EXISTS`, `REVIEW_NOT_FOUND` — detalhes em `error-catalog.md`.
+`READING_SESSION_NOT_FOUND`, `READING_SESSION_NOT_FINISHED`, `REVIEW_ALREADY_EXISTS`, `REVIEW_NOT_FOUND` — detalhes em `error-catalog.md`. Em `GET /books/{olid}/reviews`: `BOOK_NOT_FOUND`, `OPEN_LIBRARY_UNAVAILABLE`.

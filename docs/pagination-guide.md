@@ -1,12 +1,16 @@
 # Guia de paginação
 
-Toda lista que cresce ou muda ao longo do tempo é paginada por **cursor opaco**, nunca por número de página/offset. Isso vale para: `GET /feed`, `GET /me/notifications`, `GET /me/followers`, `GET /me/following`, `GET /me/follow-requests`, `GET /me/reading-sessions`, `GET /me/want-to-read`, `GET /activities/{activityId}/comments`.
+Toda lista que cresce ou muda ao longo do tempo é paginada por **cursor opaco**, nunca por número de página/offset. Isso vale para: `GET /feed`, `GET /me/notifications`, `GET /me/followers`, `GET /me/following`, `GET /me/follow-requests`, `GET /me/reading-sessions`, `GET /me/want-to-read`, `GET /books/{olid}/reviews`, `GET /activities/{activityId}/comments`.
 
-(`GET /books/search` e `GET /users/search` são a exceção — usam `page`/`limit` tradicionais, porque são buscas num catálogo externo/estático, não um feed que muda sob o pé do usuário.)
+Exceções:
+- `GET /books/search` e `GET /users/search` — usam `page`/`limit` tradicionais, porque são buscas num catálogo externo/estático, não um feed que muda sob o pé do usuário.
+- `GET /books/popular-among-following` — **não é paginado**: devolve `{ "items": [...] }` (até 20) e **não** tem `nextCursor`.
 
 ## Formato do cursor
 
 O cursor é uma string opaca: **não tente decodificar, montar ou inspecionar seu conteúdo no cliente** — trate como um token. Internamente é `base64url` de `{"createdAt": "<ISO 8601>", "id": "<hex>"}`, mas isso é um detalhe de implementação que pode mudar sem aviso.
+
+> **Mudança de formato — `GET /me/reading-sessions`**: nesta versão da API o cursor desse endpoint passou a carregar também o `status` da session (a ordenação agora agrupa `reading` antes de `finished`). Cursores emitidos pela versão anterior (sem `status`) são rejeitados com `400 VALIDATION_ERROR`. Como o cliente nunca deve persistir nem construir cursores, o efeito prático é só recomeçar a paginação desse endpoint da primeira página.
 
 ## Como pedir a próxima página
 
