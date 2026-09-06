@@ -22,20 +22,20 @@ Contexto completo — glossário de domínio, decisões de produto travadas (P1�
 <!-- O bloco AUTO-GERADO é anexado abaixo na primeira vez que /plan rodar. -->
 
 <!-- SDD:AUTO-GERADO:INICIO -->
-<!-- Gerado automaticamente por update-agent-context.sh a partir de E:/projetos/better-books/specs/009-frontendintegrationdocs/plan.md. -->
+<!-- Gerado automaticamente por update-agent-context.sh a partir de E:/projetos/better-books/specs/010-readingcontractgaps/plan.md. -->
 <!-- Não edite esta seção manualmente; edite o plan.md e rode o script de novo. -->
 
-## Stack ativa (feature: 009-frontendintegrationdocs)
+## Stack ativa (feature: 010-readingcontractgaps)
 
 
-**Linguagem/versão**: sem código de aplicação novo — os artefatos são Markdown + OpenAPI 3.1 (YAML). O projeto em si continua TypeScript ~5.9 (strict, `module: commonjs`, `target: es2016`) sobre Node.js v24 (inalterado por esta feature).
-**Dependências principais**: nenhuma dependência de runtime nova. **1 devDependency nova**: `@redocly/cli`, usada só para `lint`/validação estática do OpenAPI unificado (exigência direta da Definição de Pronto da spec — "valida sem erros num validador de schema"). Ver justificativa em `research.md`.
-**Armazenamento**: N/A — esta feature não toca MongoDB, não cria coleção nem migration.
-**Testes**: não há regra de negócio nova, logo não há teste `vitest` novo. A "verificação" desta feature é: (a) `npx redocly lint docs/openapi.yaml` sem erros; (b) checklist de cobertura cruzando `docs/openapi.yaml` contra as rotas reais em `src/controllers/**/*.routes.ts` (43 endpoints); (c) checklist de cobertura do catálogo de erros contra as classes em `src/errors/*.error.ts`. Passos detalhados em `quickstart.md`.
-**Plataforma-alvo**: N/A para execução — os artefatos são consumidos por humanos (dev do front-end) e por ferramentas de OpenAPI (ex.: geração de client, Swagger UI), não por um runtime próprio.
-**Tipo de projeto**: single (mesmo monolito backend); esta feature não altera a estrutura de camadas `controller → service → repository`, só documenta o que já existe nela.
-**Metas de performance**: N/A.
-**Restrições**: nenhuma mudança em `src/**` (leitura apenas, para extrair a verdade atual); nenhum endpoint, schema, migration ou índice novo; exemplos de request/response nos documentos usam dados fictícios (nenhum token, e-mail ou credencial real); nomes de arquivo/pasta em `docs/` em inglês (regra fixa do kit), conteúdo/prosa em português (mesma convenção já usada em `specs/*/contracts/error-codes.md`).
-**Escala/escopo**: 1 documento OpenAPI unificado cobrindo **43 endpoints** em **12 domínios** de controller (`auth`, `books`, `follows`, `profile`, `users`, `reading-sessions`, `reviews`, `feed`, `comments`, `reactions`, `notifications`, `health`); **7 guias de fluxo** (auth, follow, reading, review, feed, interactions, notifications); 1 catálogo de erros único; 1 guia de autenticação; 1 guia de paginação; 1 referência do bloco `viewer`; 1 prompt de design; 1 devDependency nova (`@redocly/cli`) + 1 npm script novo (`docs:lint`).
+**Linguagem/versão**: TypeScript ~5.9 (`strict`, `module: commonjs`, `target: es2016`) sobre Node.js v24. Sem mudança.
+**Dependências principais**: Fastify 5, Awilix (`@fastify/awilix`) para DI, driver nativo `mongodb` 7, `zod` 4. Nenhuma dependência de runtime nova. `@redocly/cli` (devDependency já existente, da feature 009) é usada por `pnpm docs:lint`.
+**Armazenamento**: MongoDB (driver nativo, sem ODM), migrations com `migrate-mongo`. Esta feature **não cria coleção**; adiciona **3 índices** (1 migration) e **1 campo opcional** sem índice (`books.pageCount`, sem migration — schemaless, preenchimento lazy).
+**Testes**: Vitest, dois *projects* (`unit` / `integration`). Regra de negócio → integração com `mongodb-memory-server` (sem mock de banco), ≥ 70% cobertura, caminho feliz + ≥1 erro. Funções puras (mappers, schemas zod, cursor codec) → unitário isolado. Verificação de docs: `pnpm docs:lint` + cruzamento de rotas/schemas.
+**Plataforma-alvo**: servidor (API HTTP), consumida pelo app web da `002-reading-books` e por ferramentas OpenAPI.
+**Tipo de projeto**: single (monolito backend em camadas `controller → service → repository`). Esta feature não altera as camadas, só adiciona operações e um campo.
+**Metas de performance**: N/A explícito. Os índices novos (research D7) evitam collection scan nas 3 queries novas conforme a base cresce.
+**Restrições**: sem mudança em auth, em `follow-requests`/aprovação, nem no modelo persistido de `Review` e `ReadingSession` (só consulta/serialização). Nomes de arquivo/identificador em inglês; prosa dos artefatos SDD em português. Exemplos nos docs com dados fictícios.
+**Escala/escopo**: 2 endpoints novos + 1 alterado + 1 campo novo em 4 superfícies de livro. ~6 arquivos de serviço/controller novos, ~10 arquivos existentes tocados, 3 métodos de repositório novos, 1 migration, 1 codec de cursor, delta no `docs/openapi.yaml` + 3 guias em `docs/`.
 
 <!-- SDD:AUTO-GERADO:FIM -->
